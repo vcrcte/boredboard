@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Navbar, { Logo } from "@/components/Navbar";
+import { ensureProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
 type Field = "name" | "email" | "password";
@@ -77,11 +78,15 @@ export default function Signup() {
     if (!isValid) return;
 
     const email = values.email.trim();
+    const name = values.name.trim();
     setSubmitting(true);
 
+    // The name is also kept in the auth metadata, so the profile can still be
+    // created at first sign-in when it can't be written right now.
     const { data, error } = await supabase.auth.signUp({
       email,
       password: values.password,
+      options: { data: { name } },
     });
 
     if (error || !data.user) {
@@ -98,8 +103,8 @@ export default function Signup() {
       return;
     }
 
-    // No session means the address must be confirmed first: the profile can't
-    // be inserted yet because RLS requires an authenticated user.
+    // No session means the address must be confirmed first: RLS rejects any
+    // write to profiles until then, so the dashboard creates it at first sign-in.
     if (!data.session) {
       setNotice(
         "Compte créé. Confirme ton adresse via l'email que nous venons d'envoyer pour continuer.",
@@ -108,16 +113,22 @@ export default function Signup() {
       return;
     }
 
-    const { error: profileError } = await supabase.from("profiles").insert({
+    const { error: upsertError } = await supabase.from("profiles").upsert({
       id: data.user.id,
+      name,
       username: email.split("@")[0],
-      name: values.name.trim(),
+      created_at: new Date().toISOString(),
     });
 
-    if (profileError) {
-      setFormError(translateError(profileError.message));
-      setSubmitting(false);
-      return;
+    // Most likely the email prefix is already someone's username: retry with a
+    // unique one rather than leaving the account without a profile.
+    if (upsertError) {
+      const profileError = await ensureProfile(data.user, name);
+      if (profileError) {
+        setFormError(translateError(profileError));
+        setSubmitting(false);
+        return;
+      }
     }
 
     router.push("/onboarding");

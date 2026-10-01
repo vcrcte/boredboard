@@ -1,18 +1,69 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Session } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import Navbar, { getInitials } from "@/components/Navbar";
+import { ensureProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
-const filters = [
-  "Tout",
-  "Actualités",
-  "Musique",
-  "Livres",
-  "Podcasts",
-  "Découvertes",
+type PostType = "article" | "reflexion" | "livre" | "musique";
+
+type Post = {
+  id: string;
+  user_id: string;
+  type: PostType;
+  content: string;
+  url: string | null;
+  category: string | null;
+  likes_count: number | null;
+  created_at: string;
+  profiles: {
+    id: string;
+    name: string | null;
+    username: string;
+    avatar_url: string | null;
+  } | null;
+};
+
+const POST_SELECT = "*, profiles (id, name, username, avatar_url)";
+
+// Feed filters map to post types; filters without a type have no posts yet.
+const filters: { label: string; type?: PostType }[] = [
+  { label: "Tout" },
+  { label: "Actualités", type: "article" },
+  { label: "Musique", type: "musique" },
+  { label: "Livres", type: "livre" },
+  { label: "Podcasts" },
+  { label: "Découvertes", type: "reflexion" },
+];
+
+const typeLabels: Record<PostType, string> = {
+  article: "partage un article",
+  reflexion: "partage une réflexion",
+  livre: "lit",
+  musique: "écoute",
+};
+
+const pillTones = {
+  green: "bg-[#E8F4EE] text-[#3F8560]",
+  violet: "bg-[#F1ECF8] text-[#7A5AA6]",
+  gold: "bg-[#FDF7E8] text-[#9A8232]",
+  indigo: "bg-[#EEF0F8] text-[#2A3560]",
+};
+
+const categories: { label: string; tone: keyof typeof pillTones }[] = [
+  { label: "Géopolitique", tone: "green" },
+  { label: "Histoire", tone: "gold" },
+  { label: "Philosophie", tone: "violet" },
+  { label: "Science", tone: "green" },
+  { label: "Art & Design", tone: "violet" },
+  { label: "Littérature", tone: "gold" },
+  { label: "Musique", tone: "violet" },
+  { label: "Cinéma", tone: "indigo" },
+  { label: "Économie", tone: "green" },
+  { label: "Technologie", tone: "indigo" },
 ];
 
 const icons = {
@@ -65,16 +116,8 @@ const icons = {
     </>
   ),
   bookmark: <path d="M6.5 4h11v16.5l-5.5-4-5.5 4V4Z" />,
-  sparkle: (
-    <>
-      <path d="M11 4l1.8 5.2L18 11l-5.2 1.8L11 18l-1.8-5.2L4 11l5.2-1.8L11 4Z" />
-      <path d="M18.5 3.5v3M17 5h3M19 17v3M17.5 18.5h3" />
-    </>
-  ),
-  play: <path d="M8 5.5v13l10.5-6.5L8 5.5Z" />,
-  pause: <path d="M8 5.5v13M16 5.5v13" />,
-  previous: <path d="M18 6v12l-9-6 9-6ZM6 6v12" />,
-  next: <path d="M6 6v12l9-6-9-6ZM18 6v12" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  close: <path d="M6 6l12 12M18 6 6 18" />,
 };
 
 type IconName = keyof typeof icons;
@@ -96,18 +139,6 @@ const spaces: { name: IconName; label: string; bg: string; color: string; filter
   { name: "puzzle", label: "Jeux", bg: "bg-[#E8F4EE]", color: "text-[#3F8560]" },
 ];
 
-const pillStyles = {
-  green: "bg-[#E8F4EE] text-[#3F8560]",
-  violet: "bg-[#F1ECF8] text-[#7A5AA6]",
-  gold: "bg-[#FDF7E8] text-[#9A8232]",
-};
-
-const tracks = [
-  { title: "Gymnopédie n°1", artist: "Erik Satie", duration: 192 },
-  { title: "Clair de lune", artist: "Claude Debussy", duration: 303 },
-  { title: "Spiegel im Spiegel", artist: "Arvo Pärt", duration: 498 },
-];
-
 const following = [
   { name: "Sophie A.", tag: "Géopolitique", color: "bg-[#5B9A78]" },
   { name: "Léa R.", tag: "Musique", color: "bg-[#8B6BB5]" },
@@ -125,8 +156,32 @@ const trends = [
 
 const newsletterTags = ["Géopolitique", "Musique", "Littérature"];
 
-function formatTime(seconds: number) {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+function timeAgo(date: string) {
+  const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
+  if (minutes < 1) return "à l'instant";
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `il y a ${days} j`;
+  return new Date(date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Only http(s) links are rendered, so a stored `javascript:` URL can't run.
+function safeUrl(url: string | null) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function inferType(category: string | null, url: string): PostType {
+  if (category === "Musique") return "musique";
+  if (category === "Littérature") return "livre";
+  return url ? "article" : "reflexion";
 }
 
 function Icon({
@@ -154,46 +209,7 @@ function Icon({
   );
 }
 
-function Avatar({ initials, color }: { initials: string; color: string }) {
-  return (
-    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-medium text-white ${color}`}>
-      {initials}
-    </span>
-  );
-}
-
-function CardHeader({
-  pill,
-  tone,
-  avatar,
-  meta,
-}: {
-  pill: string;
-  tone: keyof typeof pillStyles;
-  avatar: ReactNode;
-  meta: string;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#888780]">
-      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium ${pillStyles[tone]}`}>
-        {pill}
-      </span>
-      <span>·</span>
-      {avatar}
-      <span>{meta}</span>
-    </div>
-  );
-}
-
-function Card({ children }: { children: ReactNode }) {
-  return (
-    <article className="rounded-[10px] border border-[#E8E8E8] bg-white p-5">
-      {children}
-    </article>
-  );
-}
-
-function Actions({ likes, comments }: { likes: number; comments: number }) {
+function Actions({ likes }: { likes: number }) {
   const [active, setActive] = useState({
     like: false,
     comment: false,
@@ -203,7 +219,7 @@ function Actions({ likes, comments }: { likes: number; comments: number }) {
 
   const actions: { name: keyof typeof active; label: string; count?: number }[] = [
     { name: "like", label: "Aimer", count: likes + (active.like ? 1 : 0) },
-    { name: "comment", label: "Commenter", count: comments },
+    { name: "comment", label: "Commenter" },
     { name: "share", label: "Partager" },
     { name: "bookmark", label: "Enregistrer" },
   ];
@@ -229,72 +245,201 @@ function Actions({ likes, comments }: { likes: number; comments: number }) {
   );
 }
 
-function Player() {
-  const [trackIndex, setTrackIndex] = useState(0);
-  const [elapsed, setElapsed] = useState(118);
-  const [playing, setPlaying] = useState(false);
-  const track = tracks[trackIndex];
-
-  useEffect(() => {
-    if (!playing) return;
-    const timer = setInterval(() => {
-      setElapsed((current) => Math.min(current + 1, track.duration));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [playing, track.duration]);
-
-  const skip = (step: number) => {
-    setTrackIndex((trackIndex + step + tracks.length) % tracks.length);
-    setElapsed(0);
-  };
-
-  const controls: { name: IconName; label: string; onClick: () => void }[] = [
-    { name: "previous", label: "Morceau précédent", onClick: () => skip(-1) },
-    {
-      name: playing ? "pause" : "play",
-      label: playing ? "Pause" : "Lecture",
-      onClick: () => setPlaying(!playing),
-    },
-    { name: "next", label: "Morceau suivant", onClick: () => skip(1) },
-  ];
+function PostCard({ post }: { post: Post }) {
+  const author = post.profiles;
+  const authorName = author?.name ?? author?.username ?? "Quelqu'un";
+  const tone = categories.find((category) => category.label === post.category)?.tone ?? "indigo";
+  const link = safeUrl(post.url);
 
   return (
-    <div className="mt-3 flex items-center gap-4 rounded-[10px] bg-[#F5F4F0] p-3.5">
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-[#EEF0F8] text-[#3D4F8C]">
-        <Icon name="music" className="h-6 w-6" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold text-[#1C1B2E]">
-          {track.title}
-        </p>
-        <p className="truncate text-[11px] text-[#888780]">{track.artist}</p>
-        <div className="mt-2.5 h-1 rounded-full bg-white">
-          <div
-            className="h-1 rounded-full bg-[#3D4F8C]"
-            style={{ width: `${(elapsed / track.duration) * 100}%` }}
-          />
-        </div>
-        <div className="mt-1 flex justify-between text-[10px] text-[#888780]">
-          <span>{formatTime(elapsed)}</span>
-          <span>{formatTime(track.duration)}</span>
-        </div>
+    <article className="rounded-[10px] border border-[#E8E8E8] bg-white p-5">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#888780]">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#3D4F8C] text-[9px] font-medium text-white">
+          {getInitials(author?.name ?? null, author?.username)}
+        </span>
+        <span>
+          <span className="font-medium text-[#1C1B2E]">{authorName}</span>{" "}
+          {typeLabels[post.type]} · {timeAgo(post.created_at)}
+        </span>
+        {post.category && (
+          <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[10px] font-medium ${pillTones[tone]}`}>
+            {post.category}
+          </span>
+        )}
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {controls.map((control, index) => (
+      <p className="mt-3 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#1C1B2E]">
+        {post.content}
+      </p>
+      {link && (
+        <a
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 block truncate rounded-[8px] bg-[#F5F4F0] px-3 py-2 text-[12px] text-[#3D4F8C] hover:underline"
+        >
+          {link.hostname.replace(/^www\./, "")}
+          <span className="text-[#888780]">{link.pathname !== "/" && link.pathname}</span>
+        </a>
+      )}
+      <Actions likes={post.likes_count ?? 0} />
+    </article>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div aria-hidden className="animate-pulse rounded-[10px] border border-[#E8E8E8] bg-white p-5">
+      <div className="flex items-center gap-2">
+        <span className="h-6 w-6 rounded-full bg-[#F5F4F0]" />
+        <span className="h-2.5 w-40 rounded-full bg-[#F5F4F0]" />
+      </div>
+      <div className="mt-4 h-3 w-full rounded-full bg-[#F5F4F0]" />
+      <div className="mt-2 h-3 w-4/5 rounded-full bg-[#F5F4F0]" />
+      <div className="mt-2 h-3 w-2/5 rounded-full bg-[#F5F4F0]" />
+      <div className="mt-5 h-px bg-[#E8E8E8]" />
+      <div className="mt-3 h-2.5 w-32 rounded-full bg-[#F5F4F0]" />
+    </div>
+  );
+}
+
+function NewPostModal({
+  user,
+  onClose,
+  onCreated,
+}: {
+  user: User;
+  onClose: () => void;
+  onCreated: (post: Post) => void;
+}) {
+  const [content, setContent] = useState("");
+  const [url, setUrl] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+
+    const trimmedUrl = url.trim();
+    if (trimmedUrl && !safeUrl(trimmedUrl)) {
+      setError("Le lien doit commencer par http:// ou https://");
+      return;
+    }
+
+    setSubmitting(true);
+
+    // posts.user_id references profiles, so the profile must exist first.
+    const profileError = await ensureProfile(user);
+    if (profileError) {
+      setError(`Ton profil n'a pas pu être créé : ${profileError}`);
+      setSubmitting(false);
+      return;
+    }
+
+    const { data, error: insertError } = await supabase
+      .from("posts")
+      .insert({
+        user_id: user.id,
+        type: inferType(category, trimmedUrl),
+        content: content.trim(),
+        url: trimmedUrl || null,
+        category,
+      })
+      .select(POST_SELECT)
+      .single();
+
+    if (insertError) {
+      setError(`La publication a échoué : ${insertError.message}`);
+      setSubmitting(false);
+      return;
+    }
+
+    onCreated(data as Post);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-30 flex items-center justify-center bg-[#1C1B2E]/40 px-5"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-post-title"
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-[480px] rounded-[16px] border border-[#E8E8E8] bg-white p-6"
+      >
+        <div className="flex items-center justify-between">
+          <h2 id="new-post-title" className="font-serif text-[18px] text-[#1C1B2E]">
+            Nouveau post
+          </h2>
           <button
-            key={control.label}
             type="button"
-            onClick={control.onClick}
-            aria-label={control.label}
-            className={
-              index === 1
-                ? "flex h-9 w-9 items-center justify-center rounded-full bg-[#2A3560] text-white transition-colors hover:bg-[#3D4F8C]"
-                : "flex h-7 w-7 items-center justify-center text-[#888780] transition-colors hover:text-[#2A3560]"
-            }
+            onClick={onClose}
+            aria-label="Fermer"
+            className="text-[#888780] transition-colors hover:text-[#2A3560]"
           >
-            <Icon name={control.name} className="h-4 w-4" filled={control.name !== "pause"} />
+            <Icon name="close" className="h-4 w-4" />
           </button>
-        ))}
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+          <textarea
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Qu'est-ce qui t'intéresse aujourd'hui ?"
+            aria-label="Contenu du post"
+            rows={4}
+            autoFocus
+            className="w-full resize-none rounded-[8px] border border-[#E8E8E8] bg-white px-3 py-2.5 text-[13px] leading-relaxed text-[#1C1B2E] outline-none transition-colors placeholder:text-[#888780] focus:border-[#3D4F8C]"
+          />
+          <input
+            type="url"
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="Lien (optionnel)"
+            aria-label="Lien (optionnel)"
+            className="h-10 w-full rounded-[8px] border border-[#E8E8E8] bg-white px-3 text-[13px] text-[#1C1B2E] outline-none transition-colors placeholder:text-[#888780] focus:border-[#3D4F8C]"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                aria-pressed={category === item.label}
+                onClick={() => setCategory(category === item.label ? null : item.label)}
+                className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
+                  category === item.label
+                    ? "border-[#2A3560] bg-[#2A3560] text-white"
+                    : "border-[#E8E8E8] bg-white text-[#888780] hover:border-[#2A3560] hover:text-[#2A3560]"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {error && (
+            <p role="alert" className="text-[12px] text-[#C0392B]">
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={content.trim() === "" || submitting}
+            className="mt-1 h-10 self-end rounded-[20px] bg-[#2A3560] px-6 text-[13px] font-medium text-white transition-colors hover:bg-[#3D4F8C] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#2A3560]"
+          >
+            {submitting ? "Publication…" : "Publier"}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -308,107 +453,6 @@ function SidebarTitle({ children }: { children: ReactNode }) {
   );
 }
 
-const cards = [
-  {
-    category: "Actualités",
-    content: (
-      <Card>
-        <CardHeader
-          pill="Géopolitique"
-          tone="green"
-          avatar={<Avatar initials="S" color="bg-[#5B9A78]" />}
-          meta="Sophie A. partage · il y a 14 min"
-        />
-        <h2 className="mt-3 font-serif text-[18px] leading-snug text-[#1C1B2E]">
-          Détroit de Taïwan : derrière la manœuvre navale, une nouvelle
-          grammaire de la tension
-        </h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-[#888780]">
-          Au-delà du nombre de navires, c&apos;est le vocabulaire employé par
-          chaque camp qui change. Décryptage d&apos;une escalade qui se joue
-          autant dans les mots que sur l&apos;eau.
-        </p>
-        <p className="mt-3 text-[11px] text-[#888780]">
-          Le Monde · lecture 5 min
-        </p>
-        <Actions likes={24} comments={6} />
-      </Card>
-    ),
-  },
-  {
-    category: "Musique",
-    content: (
-      <Card>
-        <CardHeader
-          pill="Musique"
-          tone="violet"
-          avatar={<Avatar initials="L" color="bg-[#8B6BB5]" />}
-          meta="Léa R. écoute · il y a 38 min"
-        />
-        <Player />
-        <Actions likes={41} comments={3} />
-      </Card>
-    ),
-  },
-  {
-    category: "Découvertes",
-    content: (
-      <Card>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDF7E8] px-2.5 py-1 text-[10px] font-medium text-[#9A8232]">
-          <Icon name="sparkle" className="h-3.5 w-3.5" />
-          Découverte pour toi
-        </span>
-        <h2 className="mt-3 font-serif text-[18px] leading-snug text-[#1C1B2E]">
-          Le wabi-sabi, ou l&apos;art de trouver la beauté dans ce qui est
-          imparfait
-        </h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-[#888780]">
-          Un bol fêlé, un mur patiné, une saison qui finit : cette esthétique
-          japonaise fait de l&apos;usure et de l&apos;inachevé une forme
-          d&apos;élégance.
-        </p>
-        <p className="mt-3 text-[11px] text-[#888780]">
-          Philosophie Magazine · lecture 4 min
-        </p>
-        <Actions likes={58} comments={9} />
-      </Card>
-    ),
-  },
-  {
-    category: "Livres",
-    content: (
-      <Card>
-        <CardHeader
-          pill="Livres"
-          tone="gold"
-          avatar={<Avatar initials="J" color="bg-[#C4A94A]" />}
-          meta="Jules D. lit · il y a 2 h"
-        />
-        <p className="mt-3 font-serif text-[15px] italic leading-relaxed text-[#1C1B2E]">
-          « Une réalité imaginaire n&apos;est pas un mensonge : c&apos;est une
-          chose à laquelle tout le monde croit. »
-        </p>
-        <div className="mt-4 flex items-center gap-3.5 rounded-[10px] bg-[#F5F4F0] p-3.5">
-          <span className="flex h-14 w-10 shrink-0 items-center justify-center rounded-[3px] bg-[#FDF7E8] font-serif text-[18px] text-[#C4A94A]">
-            S
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-serif text-[14px] text-[#1C1B2E]">Sapiens</p>
-            <p className="text-[11px] text-[#888780]">Yuval Noah Harari</p>
-            <div className="mt-2 flex items-center gap-2.5">
-              <div className="h-1 flex-1 rounded-full bg-white">
-                <div className="h-1 w-[48%] rounded-full bg-[#C4A94A]" />
-              </div>
-              <span className="text-[11px] font-medium text-[#C4A94A]">48%</span>
-            </div>
-          </div>
-        </div>
-        <Actions likes={17} comments={2} />
-      </Card>
-    ),
-  },
-];
-
 export default function Dashboard() {
   const router = useRouter();
   // undefined while the session is still being read, null once known to be absent.
@@ -416,6 +460,11 @@ export default function Dashboard() {
   const [name, setName] = useState<string | null>(null);
   const [filter, setFilter] = useState("Tout");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  // null while the feed is loading.
+  const [posts, setPosts] = useState<Post[] | null>(null);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -435,23 +484,51 @@ export default function Dashboard() {
     return () => subscription.unsubscribe();
   }, [router]);
 
-  const userId = session?.user.id;
+  const user = session?.user;
+  const userId = user?.id;
+
+  const loadPosts = useCallback(async () => {
+    setPosts(null);
+    setFeedError(null);
+    const { data, error } = await supabase
+      .from("posts")
+      .select(POST_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      setFeedError(error.message);
+      return;
+    }
+    setPosts(data as Post[]);
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
+    loadPosts();
+
     let cancelled = false;
-    supabase
-      .from("profiles")
-      .select("name")
-      .eq("id", userId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setName(data?.name ?? null);
-      });
+    (async () => {
+      // Accounts created before their email was confirmed have no profile yet.
+      const profileError = user ? await ensureProfile(user) : null;
+      if (cancelled) return;
+      setProfileError(profileError);
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!cancelled) setName(data?.name ?? null);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+    // Keyed on the user id: the user object changes identity on token refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, loadPosts]);
+
+  const closeModal = useCallback(() => setModalOpen(false), []);
 
   // Nothing is shown until the session is confirmed, so a signed-out visitor
   // never sees the dashboard before being redirected.
@@ -459,8 +536,9 @@ export default function Dashboard() {
     return <div className="min-h-screen bg-[#F5F4F0]" />;
   }
 
-  const visibleCards = cards.filter(
-    (card) => filter === "Tout" || card.category === filter,
+  const activeType = filters.find((item) => item.label === filter)?.type;
+  const visiblePosts = (posts ?? []).filter(
+    (post) => filter === "Tout" || post.type === activeType,
   );
 
   return (
@@ -499,35 +577,86 @@ export default function Dashboard() {
         </aside>
 
         <main className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[640px] px-5 py-6">
+          <div className="mx-auto max-w-[640px] px-5 pb-24 pt-6">
             <div className="flex flex-wrap gap-2">
               {filters.map((item) => (
                 <button
-                  key={item}
+                  key={item.label}
                   type="button"
-                  onClick={() => setFilter(item)}
+                  onClick={() => setFilter(item.label)}
                   className={`rounded-full border px-3.5 py-1.5 text-[12px] transition-colors ${
-                    filter === item
+                    filter === item.label
                       ? "border-[#2A3560] bg-[#2A3560] text-white"
                       : "border-[#E8E8E8] bg-white text-[#888780] hover:border-[#2A3560] hover:text-[#2A3560]"
                   }`}
                 >
-                  {item}
+                  {item.label}
                 </button>
               ))}
             </div>
 
+            {profileError && (
+              <p role="alert" className="mt-4 rounded-[10px] border border-[#E8E8E8] bg-white px-4 py-3 text-[12px] text-[#C0392B]">
+                Ton profil n&apos;a pas pu être créé : {profileError}
+              </p>
+            )}
+
             <div className="mt-5 flex flex-col gap-4">
-              {/* Hidden rather than unmounted, so likes and playback survive a filter change. */}
-              {cards.map((card) => (
-                <div key={card.category} hidden={!visibleCards.includes(card)}>
-                  {card.content}
+              {feedError ? (
+                <div role="alert" className="rounded-[10px] border border-[#E8E8E8] bg-white px-5 py-10 text-center">
+                  <p className="font-serif text-[16px] text-[#1C1B2E]">
+                    Impossible de charger le feed
+                  </p>
+                  <p className="mt-1.5 text-[12px] text-[#C0392B]">{feedError}</p>
+                  <button
+                    type="button"
+                    onClick={loadPosts}
+                    className="mt-4 rounded-md border border-[#E8E8E8] px-4 py-2 text-[12px] text-[#2A3560] transition-colors hover:border-[#2A3560]"
+                  >
+                    Réessayer
+                  </button>
                 </div>
-              ))}
-              {visibleCards.length === 0 && (
-                <p className="rounded-[10px] border border-dashed border-[#E8E8E8] px-5 py-10 text-center text-[13px] text-[#888780]">
-                  Rien dans « {filter} » pour l&apos;instant.
-                </p>
+              ) : posts === null ? (
+                <>
+                  <span className="sr-only" role="status">
+                    Chargement du feed…
+                  </span>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : posts.length === 0 ? (
+                <div className="flex flex-col items-center rounded-[10px] border border-[#E8E8E8] bg-white px-5 py-14 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF0F8] text-[#2A3560]">
+                    <Icon name="compass" className="h-6 w-6" />
+                  </span>
+                  <h2 className="mt-4 font-serif text-[18px] text-[#1C1B2E]">
+                    Ton feed est vide pour l&apos;instant
+                  </h2>
+                  <p className="mt-1.5 text-[13px] text-[#888780]">
+                    Suis des personnes ou explore du contenu pour commencer
+                  </p>
+                  <Link
+                    href="/explore"
+                    className="mt-5 rounded-[20px] bg-[#2A3560] px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#3D4F8C]"
+                  >
+                    Explorer
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  {/* Hidden rather than unmounted, so likes survive a filter change. */}
+                  {posts.map((post) => (
+                    <div key={post.id} hidden={!visiblePosts.includes(post)}>
+                      <PostCard post={post} />
+                    </div>
+                  ))}
+                  {visiblePosts.length === 0 && (
+                    <p className="rounded-[10px] border border-dashed border-[#E8E8E8] px-5 py-10 text-center text-[13px] text-[#888780]">
+                      Rien dans « {filter} » pour l&apos;instant.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -619,6 +748,27 @@ export default function Dashboard() {
           </div>
         </aside>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        aria-label="Nouveau post"
+        title="Nouveau post"
+        className="fixed bottom-6 right-6 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-[#2A3560] text-white transition-colors hover:bg-[#3D4F8C]"
+      >
+        <Icon name="plus" className="h-5 w-5" />
+      </button>
+
+      {modalOpen && (
+        <NewPostModal
+          user={session.user}
+          onClose={closeModal}
+          onCreated={(post) => {
+            setPosts((current) => [post, ...(current ?? [])]);
+            setModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
