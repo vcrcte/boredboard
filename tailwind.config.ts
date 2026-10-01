@@ -8,6 +8,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        serif: ["Georgia", "Times New Roman", "serif"],
+      },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
