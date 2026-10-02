@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import Navbar, { getInitials } from "@/components/Navbar";
 import { ensureProfile } from "@/lib/profile";
+import { avatarTones, contacts, notifications, trends } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -100,15 +101,6 @@ const categories: { label: string; tone: keyof typeof tones; filter?: string }[]
   { label: "Tech", tone: "indigo" },
 ];
 
-const avatarTones = [
-  { background: "#E1F5EE", color: "#0F6E56" },
-  { background: "#FAECE7", color: "#993C1D" },
-  { background: "#FAEEDA", color: "#854F0B" },
-  { background: "#EAF3DE", color: "#3B6D11" },
-  { background: "#FBEAF0", color: "#993556" },
-  { background: "#EEEDFE", color: "#534AB7" },
-];
-
 // Navigation entries and spaces either filter the feed or link to a page;
 // those with neither have no destination yet.
 const navItems: { icon: string; label: string; filter?: string; href?: string }[] = [
@@ -125,28 +117,6 @@ const spaces: { icon: string; title: string; detail: string; filter?: string; hr
   { icon: "📖", title: "Livres", detail: "3 en cours", filter: "Livres" },
   { icon: "🎙", title: "Podcasts", detail: "2 favoris", filter: "Podcasts" },
   { icon: "🎮", title: "Jeux", detail: "Série 7j 🔥", href: "/jeux/mot-fantome" },
-];
-
-const contacts = [
-  { initials: "SA", name: "Sophie A.", tags: "Géopo · Histoire", online: true, ...avatarTones[0] },
-  { initials: "MK", name: "Marc K.", tags: "Philo · Art", online: true, ...avatarTones[1] },
-  { initials: "LR", name: "Léa R.", tags: "Musique", online: false, ...avatarTones[2] },
-  { initials: "JD", name: "Jules D.", tags: "Livres · Philo", online: false, ...avatarTones[3] },
-  { initials: "NB", name: "Nina B.", tags: "Science · Podcast", online: true, ...avatarTones[4] },
-];
-
-const notifications = [
-  { text: "Sophie a commenté ton partage", time: "8 min", unread: true },
-  { text: "43 personnes ont répondu au quiz", time: "22 min", unread: true },
-  { text: "Nina te suit maintenant", time: "3h", unread: false },
-];
-
-const trends = [
-  { topic: "Géopolitique de l'eau", count: "2.4k" },
-  { topic: "Stoïcisme & burnout", count: "1.8k" },
-  { topic: "James Webb", count: "1.2k" },
-  { topic: "Prix Goncourt", count: "876" },
-  { topic: "Bauhaus & modernité", count: "541" },
 ];
 
 const quiz = {
@@ -1084,7 +1054,7 @@ export default function Dashboard() {
         {/* Feed */}
         <div className="relative min-h-0 min-w-0">
           <main className="flex h-full flex-col overflow-y-auto" style={{ background: CREAM, padding: "0 20px 96px", gap: 12 }}>
-            <div className="sticky top-0 z-10 mb-2" style={{ background: CREAM, paddingTop: 20, paddingBottom: 12, borderBottom: `1px solid ${black(0.06)}` }}>
+            <div className="sticky top-0 z-10 mb-2 shrink-0" style={{ background: CREAM, paddingTop: 20, paddingBottom: 12, borderBottom: `1px solid ${black(0.06)}` }}>
               <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 6 }}>
                 {filters.map((item) => (
                   <button
@@ -1136,7 +1106,7 @@ export default function Dashboard() {
               <>
                 {/* Hidden rather than unmounted, so likes and drafts survive a filter change. */}
                 {feedItems.map((item) => (
-                  <div key={item.key} hidden={!isVisible(item.tags)}>
+                  <div key={item.key} hidden={!isVisible(item.tags)} className="shrink-0">
                     {item.node}
                   </div>
                 ))}
