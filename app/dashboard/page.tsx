@@ -12,8 +12,30 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import Navbar, { getInitials } from "@/components/Navbar";
+import SharedMusicCard from "@/components/MusicCard";
+import NewsCard, { NewsError, NewsSkeleton } from "@/components/NewsCard";
+import Customizer from "@/components/dashboard/Customizer";
+import Actions, { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
+import {
+  DiscussionsCard,
+  MarketsFlashCard,
+  NowListeningCard,
+  ReadingNowCard,
+  socialCardsCss,
+} from "@/components/dashboard/SocialCards";
+import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
+import { useNews } from "@/lib/news";
+import {
+  DEFAULT_PREFERENCES,
+  readLocalPreferences,
+  readRemotePreferences,
+  savePreferences,
+  themesQuery,
+  type ModuleId,
+  type Preferences,
+} from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
-import { avatarTones, contacts, notifications, trends } from "@/lib/sample-data";
+import { avatarTones, contacts, onlineNow, recentActivity, trends } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -47,6 +69,8 @@ const css = `
 .db-input::placeholder { color: ${DIM}; }
 .db-noscrollbar { scrollbar-width: none; }
 .db-noscrollbar::-webkit-scrollbar { display: none; }
+${socialCss}
+${socialCardsCss}
 `;
 
 type PostType = "article" | "reflexion" | "livre" | "musique";
@@ -60,6 +84,8 @@ type Post = {
   category: string | null;
   likes_count: number | null;
   created_at: string;
+  /** Music link details (see lib/music.ts); only once the metadata column exists. */
+  metadata?: unknown;
   profiles: {
     id: string;
     name: string | null;
@@ -70,6 +96,9 @@ type Post = {
 
 type Profile = { name: string | null; username: string; location: string | null };
 
+// Recommended articles shown in the feed when the news module is on.
+const NEWS_IN_FEED = 3;
+
 const POST_SELECT = "*, profiles (id, name, username, avatar_url)";
 
 const filters = ["Tout", "Actualités", "Musique", "Livres", "Podcasts", "Découvertes", "Philo", "Science", "Art"];
@@ -78,7 +107,7 @@ const postTypes: { value: PostType; label: string; verb: string; filter: string 
   { value: "article", label: "Article", verb: "partage un article", filter: "Actualités" },
   { value: "reflexion", label: "Réflexion", verb: "partage une réflexion", filter: "Découvertes" },
   { value: "livre", label: "Livre", verb: "lit", filter: "Livres" },
-  { value: "musique", label: "Musique", verb: "écoute", filter: "Musique" },
+  { value: "musique", label: "Musique", verb: "partage une musique", filter: "Musique" },
 ];
 
 const tones = {
@@ -108,7 +137,6 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "🧭", label: "Explorer" },
   { icon: "🎵", label: "Musique", filter: "Musique" },
   { icon: "📖", label: "Livres", filter: "Livres" },
-  { icon: "🎮", label: "Jeux", href: "/jeux/mot-fantome" },
   { icon: "✉️", label: "Newsletter" },
 ];
 
@@ -116,16 +144,7 @@ const spaces: { icon: string; title: string; detail: string; filter?: string; hr
   { icon: "🎵", title: "Musique", detail: "4 titres", filter: "Musique" },
   { icon: "📖", title: "Livres", detail: "3 en cours", filter: "Livres" },
   { icon: "🎙", title: "Podcasts", detail: "2 favoris", filter: "Podcasts" },
-  { icon: "🎮", title: "Jeux", detail: "Série 7j 🔥", href: "/jeux/mot-fantome" },
 ];
-
-const quiz = {
-  question: "Quel empire a construit la première route pavée de l'histoire ?",
-  options: ["Empire romain", "Empire perse", "Empire assyrien", "Égypte ancienne"],
-  // The oldest known paved road is the Lake Moeris quarry road, in Egypt.
-  answer: "Égypte ancienne",
-  responses: 893,
-};
 
 const suggestions = [
   { initials: "NL", name: "Nicolas L.", tags: "Histoire · Philo · Lit.", ...avatarTones[5] },
@@ -275,72 +294,18 @@ function ActionButton({
   );
 }
 
-function Actions({
-  likes,
-  comments,
-  extra,
-  save = "🔖",
-}: {
-  likes: number;
-  comments: number;
-  /** Optional third action, e.g. "↗ Partager". */
-  extra?: string;
-  /** Label of the last action; pass null to leave it out. */
-  save?: string | null;
-}) {
-  const [active, setActive] = useState({ like: false, comment: false, extra: false, save: false });
-  const toggle = (key: keyof typeof active) => setActive({ ...active, [key]: !active[key] });
+const sampleComments = [
+  {
+    initials: "MK",
+    name: "Marc K.",
+    text: "Le parallèle avec 1996 est frappant — même si les rapports de force ont radicalement changé.",
+    ...avatarTones[1],
+  },
+];
 
+function ArticleCard() {
   return (
-    <div className="mt-3 flex flex-wrap" style={{ gap: 4 }}>
-      <ActionButton
-        active={active.like}
-        activeStyle={{ color: "#D4537E", background: "rgba(212,83,126,0.06)" }}
-        onClick={() => toggle("like")}
-        label="Aimer"
-      >
-        ♥ {likes + (active.like ? 1 : 0)}
-      </ActionButton>
-      <ActionButton active={active.comment} onClick={() => toggle("comment")} label="Commenter">
-        💬 {comments}
-      </ActionButton>
-      {extra && (
-        <ActionButton active={active.extra} onClick={() => toggle("extra")}>
-          {extra}
-        </ActionButton>
-      )}
-      {save && (
-        <ActionButton active={active.save} onClick={() => toggle("save")} className="ml-auto" label="Sauvegarder">
-          {save}
-        </ActionButton>
-      )}
-    </div>
-  );
-}
-
-function ArticleCard({ viewerInitials }: { viewerInitials: string }) {
-  const [comments, setComments] = useState([
-    {
-      initials: "MK",
-      name: "Marc K.",
-      text: "Le parallèle avec 1996 est frappant — même si les rapports de force ont radicalement changé.",
-      ...avatarTones[1],
-    },
-  ]);
-  const [draft, setDraft] = useState("");
-
-  const handleReply = (event: FormEvent) => {
-    event.preventDefault();
-    if (!draft.trim()) return;
-    setComments([
-      ...comments,
-      { initials: viewerInitials, name: "Toi", text: draft.trim(), background: INDIGO, color: CREAM },
-    ]);
-    setDraft("");
-  };
-
-  return (
-    <article style={card}>
+    <article className="db-card" style={card}>
       <CardHeader
         avatar={<Avatar initials="SA" size={30} {...avatarTones[0]} />}
         name="Sophie A."
@@ -359,39 +324,7 @@ function ArticleCard({ viewerInitials }: { viewerInitials: string }) {
         Le Monde · lecture 5 min
       </p>
 
-      <div className="my-3" style={{ height: 1, background: black(0.06) }} />
-      <div className="-mt-3">
-        <Actions likes={47} comments={comments.length + 11} extra="↗ Partager" save="🔖 Sauvegarder" />
-      </div>
-
-      <ul className="mt-3 flex flex-col gap-2.5" style={{ paddingTop: 10, borderTop: `1px solid ${black(0.05)}` }}>
-        {comments.map((comment, index) => (
-          <li key={index} className="flex gap-2">
-            <Avatar initials={comment.initials} size={22} background={comment.background} color={comment.color} />
-            <div className="min-w-0">
-              <p style={{ fontSize: 10, fontWeight: 500, color: DIM }}>{comment.name}</p>
-              <p className="break-words" style={{ fontSize: 11, color: ink(0.6), lineHeight: 1.5 }}>
-                {comment.text}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <form onSubmit={handleReply} className="flex items-center gap-2" style={{ paddingTop: 8 }}>
-        <Avatar initials={viewerInitials} size={22} background={INDIGO} color={CREAM} />
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Répondre..."
-          aria-label="Répondre"
-          className="db-input min-w-0 flex-1"
-          style={{ background: CREAM, border: `1px solid ${black(0.07)}`, borderRadius: 20, padding: "6px 14px", fontSize: 12, color: TEXT, outline: "none" }}
-        />
-        <button type="submit" aria-label="Envoyer" style={{ color: GOLD, fontSize: 16 }}>
-          ➤
-        </button>
-      </form>
+      <Actions likes={47} comments={11} extra="↗ Partager" save="🔖 Sauvegarder" initialComments={sampleComments} />
     </article>
   );
 }
@@ -401,7 +334,7 @@ function MusicCard() {
   const [added, setAdded] = useState(false);
 
   return (
-    <article style={card}>
+    <article className="db-card" style={card}>
       <CardHeader
         avatar={<Avatar initials="LR" size={30} {...avatarTones[2]} />}
         name="Léa R."
@@ -444,7 +377,7 @@ function MusicCard() {
 
 function DiscoveryCard() {
   return (
-    <article style={card}>
+    <article className="db-card" style={card}>
       <div className="flex items-center gap-2">
         <span style={{ fontSize: 10, color: "#534AB7", background: "rgba(83,74,183,0.07)", padding: "3px 10px", borderRadius: 10 }}>
           ✦ Découverte pour toi
@@ -472,7 +405,7 @@ function BookCard() {
   const [added, setAdded] = useState(false);
 
   return (
-    <article style={card}>
+    <article className="db-card" style={card}>
       <CardHeader
         avatar={<Avatar initials="JD" size={30} {...avatarTones[3]} />}
         name="Jules D."
@@ -517,7 +450,7 @@ function PodcastCard() {
   const [playing, setPlaying] = useState(false);
 
   return (
-    <article style={card}>
+    <article className="db-card" style={card}>
       <CardHeader
         avatar={<Avatar initials="NB" size={30} {...avatarTones[4]} />}
         name="Nina B."
@@ -551,7 +484,32 @@ function PodcastCard() {
   );
 }
 
+/** Metadata saved with the post, or looked up again from its link (posts made before the metadata column). */
+function usePostEmbed(post: Post) {
+  const stored = post.type === "musique" ? parseEmbed(post.metadata) : null;
+  const [embed, setEmbed] = useState<MusicEmbed | null>(stored);
+  const needsLookup = post.type === "musique" && !stored && Boolean(post.url);
+
+  useEffect(() => {
+    if (!needsLookup || !post.url) return;
+    let cancelled = false;
+    fetchEmbed(post.url)
+      .then((result) => {
+        if (!cancelled) setEmbed(result);
+      })
+      .catch(() => {
+        // Unknown link: the post falls back to the plain link row.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsLookup, post.url]);
+
+  return embed;
+}
+
 function PostCard({ post }: { post: Post }) {
+  const embed = usePostEmbed(post);
   const author = post.profiles;
   const type = postTypes.find((item) => item.value === post.type);
   const category = categories.find((item) => item.label === post.category);
@@ -560,18 +518,38 @@ function PostCard({ post }: { post: Post }) {
   const tone = avatarTones[(post.user_id.charCodeAt(0) + post.user_id.charCodeAt(1)) % avatarTones.length];
 
   return (
-    <article style={card}>
+    <article className="db-card" style={card}>
       <CardHeader
         avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={30} {...tone} />}
         name={author?.name ?? author?.username ?? "Quelqu'un"}
         verb={type?.verb ?? ""}
-        pill={post.category ? <Pill tone={category?.tone ?? "indigo"}>{post.category}</Pill> : undefined}
+        pill={
+          post.type === "musique" ? (
+            <Pill tone="indigo">Musique</Pill>
+          ) : post.category ? (
+            <Pill tone={category?.tone ?? "indigo"}>{post.category}</Pill>
+          ) : undefined
+        }
         time={timeAgo(post.created_at)}
       />
-      <p className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: 14, color: TEXT, lineHeight: 1.6 }}>
-        {post.content}
-      </p>
-      {link && (
+      {embed ? (
+        <>
+          {/* Without a comment the title is stored as content: no need to repeat it. */}
+          {post.content && post.content !== embed.title && (
+            <p className="mb-3 mt-2 whitespace-pre-wrap break-words" style={{ fontSize: 13, color: ink(0.6), fontStyle: "italic", lineHeight: 1.6 }}>
+              {post.content}
+            </p>
+          )}
+          <div className={post.content && post.content !== embed.title ? "" : "mt-3"}>
+            <SharedMusicCard embed={embed} href={post.url} />
+          </div>
+        </>
+      ) : (
+        <p className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: 14, color: TEXT, lineHeight: 1.6 }}>
+          {post.content}
+        </p>
+      )}
+      {link && !embed && (
         <a
           href={link.href}
           target="_blank"
@@ -586,7 +564,7 @@ function PostCard({ post }: { post: Post }) {
           </span>
         </a>
       )}
-      <Actions likes={post.likes_count ?? 0} comments={0} extra="↗ Partager" />
+      <Actions postId={post.id} likes={post.likes_count ?? 0} comments={0} extra="↗ Partager" />
     </article>
   );
 }
@@ -621,6 +599,29 @@ function NewPostModal({
   const [category, setCategory] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [musicUrl, setMusicUrl] = useState("");
+  const [musicEmbed, setMusicEmbed] = useState<MusicEmbed | null>(null);
+  const [musicLoading, setMusicLoading] = useState(false);
+  const [musicError, setMusicError] = useState(false);
+  // The link the current embed was looked up for, so editing it invalidates the preview.
+  const [lookedUp, setLookedUp] = useState("");
+
+  // Reads the field itself: on a quick paste-and-leave, the state may not be updated yet.
+  const lookUpMusic = async (value: string) => {
+    const link = value.trim();
+    if (!link || link === lookedUp) return;
+    setLookedUp(link);
+    setMusicLoading(true);
+    setMusicError(false);
+    try {
+      setMusicEmbed(await fetchEmbed(link));
+    } catch {
+      setMusicEmbed(null);
+      setMusicError(true);
+    } finally {
+      setMusicLoading(false);
+    }
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -634,7 +635,11 @@ function NewPostModal({
     event.preventDefault();
     setError(null);
 
-    const trimmedUrl = type === "article" ? url.trim() : "";
+    if (type === "musique" && !musicEmbed) {
+      setError("Ajoute un lien Spotify, Apple Music, Deezer ou YouTube reconnu.");
+      return;
+    }
+    const trimmedUrl = type === "article" ? url.trim() : type === "musique" ? musicUrl.trim() : "";
     if (trimmedUrl && !safeUrl(trimmedUrl)) {
       setError("Le lien doit commencer par http:// ou https://");
       return;
@@ -650,13 +655,21 @@ function NewPostModal({
       return;
     }
 
-    const { error: insertError } = await supabase.from("posts").insert({
+    const post: Record<string, unknown> = {
       user_id: user.id,
       type,
-      content: content.trim(),
+      // content is required: a music share without a comment stores the track title.
+      content: content.trim() || (type === "musique" && musicEmbed ? musicEmbed.title : ""),
       url: trimmedUrl || null,
       category,
-    });
+    };
+    let { error: insertError } = await supabase
+      .from("posts")
+      .insert(type === "musique" ? { ...post, metadata: musicEmbed } : post);
+    // Before the metadata column exists, publish without it: the feed looks the link up again.
+    if (insertError && type === "musique" && /metadata/i.test(insertError.message)) {
+      ({ error: insertError } = await supabase.from("posts").insert(post));
+    }
 
     if (insertError) {
       setError(`La publication a échoué : ${insertError.message}`);
@@ -731,10 +744,46 @@ function NewPostModal({
             style={{ ...field, padding: "10px 14px", fontSize: 12 }}
           />
         )}
+        {type === "musique" && (
+          <div className="mt-3">
+            <input
+              type="url"
+              value={musicUrl}
+              onChange={(event) => {
+                setMusicUrl(event.target.value);
+                if (event.target.value.trim() !== lookedUp) {
+                  setMusicEmbed(null);
+                  setMusicError(false);
+                }
+              }}
+              onBlur={(event) => lookUpMusic(event.currentTarget.value)}
+              placeholder="Colle un lien Spotify, Apple Music, Deezer ou YouTube (titre, album ou playlist...)"
+              aria-label="Lien de la musique"
+              className="db-input"
+              style={{ ...field, padding: "10px 14px", fontSize: 12 }}
+            />
+            <p className="mt-1.5" style={{ fontSize: 10, color: DIM }}>
+              🟢 Spotify · 🔴 Apple Music · 🟠 Deezer · 🔴 YouTube
+            </p>
+            <p className="mt-1" style={{ fontSize: 9, color: DIM, fontStyle: "italic" }}>Titres · Albums · Playlists supportés</p>
+            {musicLoading && <p className="mt-2" style={{ fontSize: 11, color: DIM }}>Recherche du morceau…</p>}
+            {musicEmbed && !musicLoading && (
+              <div className="mt-2">
+                <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>✓ Musique trouvée</p>
+                <SharedMusicCard embed={musicEmbed} href={musicUrl.trim()} />
+              </div>
+            )}
+            {musicError && !musicLoading && (
+              <p role="alert" className="mt-2" style={{ fontSize: 11, color: "#DC2626" }}>
+                ❌ Lien non reconnu — essaie un lien Spotify, Apple Music, Deezer ou YouTube
+              </p>
+            )}
+          </div>
+        )}
         <textarea
           value={content}
           onChange={(event) => setContent(event.target.value)}
-          placeholder="Ajouter un commentaire..."
+          placeholder={type === "musique" ? "Dis-nous pourquoi tu partages ça..." : "Ajouter un commentaire..."}
           aria-label="Commentaire"
           rows={4}
           autoFocus
@@ -771,7 +820,7 @@ function NewPostModal({
           <p style={{ fontSize: 11, color: DIM }}>Visible par tes abonnés</p>
           <button
             type="submit"
-            disabled={content.trim() === "" || submitting}
+            disabled={(type === "musique" ? !musicEmbed : content.trim() === "") || submitting}
             className="db-fab disabled:cursor-not-allowed disabled:opacity-50"
             style={{ color: CREAM, fontSize: 13, fontWeight: 500, padding: "10px 24px", borderRadius: 20 }}
           >
@@ -779,51 +828,6 @@ function NewPostModal({
           </button>
         </div>
       </form>
-    </div>
-  );
-}
-
-function Quiz() {
-  const [choice, setChoice] = useState<string | null>(null);
-
-  return (
-    <div style={{ background: CREAM, borderRadius: 12, padding: 14 }}>
-      <span className="mb-2 inline-block" style={{ ...tones.gold, fontSize: 10, borderRadius: 10, padding: "2px 8px" }}>
-        Culture générale
-      </span>
-      <p style={{ fontSize: 12, fontWeight: 500, color: TEXT, lineHeight: 1.5 }}>{quiz.question}</p>
-      <div className="mt-3 grid grid-cols-2" style={{ gap: 6 }}>
-        {quiz.options.map((option) => {
-          const isAnswer = option === quiz.answer;
-          const revealed = choice !== null && (isAnswer || option === choice);
-          return (
-            <button
-              key={option}
-              type="button"
-              disabled={choice !== null}
-              onClick={() => setChoice(option)}
-              className={revealed ? "" : "db-option"}
-              style={{
-                border: `1px solid ${black(0.07)}`,
-                borderRadius: 8,
-                padding: "8px 10px",
-                fontSize: 11,
-                textAlign: "left",
-                ...(revealed
-                  ? isAnswer
-                    ? { background: "rgba(29,158,117,0.12)", borderColor: "rgba(29,158,117,0.4)", color: "#0F6E56" }
-                    : { background: "rgba(192,57,43,0.08)", borderColor: "rgba(192,57,43,0.3)", color: "#C0392B" }
-                  : { color: TEXT }),
-              }}
-            >
-              {option}
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-2" style={{ fontSize: 10, color: DIM }}>
-        {quiz.responses + (choice ? 1 : 0)} réponses aujourd&apos;hui
-      </p>
     </div>
   );
 }
@@ -841,6 +845,16 @@ export default function Dashboard() {
   // null while the feed is loading.
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
+  // The reader's own likes, reactions and comments on the loaded posts.
+  const [mine, setMine] = useState<Record<string, MyInteractions>>({});
+  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
+
+  // The local copy shows instantly; the one saved on the profile wins once read.
+  useEffect(() => {
+    const local = readLocalPreferences();
+    if (local) setPreferences(local);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -875,7 +889,27 @@ export default function Dashboard() {
       setFeedError(error.message);
       return;
     }
-    setPosts(data as Post[]);
+
+    // Loaded before the posts are shown, so each card starts in the right state.
+    const loaded = data as Post[];
+    const { data: auth } = await supabase.auth.getSession();
+    const viewerId = auth.session?.user.id;
+    const byPost: Record<string, MyInteractions> = {};
+    if (viewerId && loaded.length > 0) {
+      const { data: rows } = await supabase
+        .from("interactions")
+        .select("post_id, type, content")
+        .eq("user_id", viewerId)
+        .in("post_id", loaded.map((post) => post.id));
+      for (const row of rows ?? []) {
+        const entry = (byPost[row.post_id] ??= { like: false, reaction: null, comment: null });
+        if (row.type === "like") entry.like = true;
+        else if (row.type === "reaction") entry.reaction = row.content;
+        else if (row.type === "comment") entry.comment = row.content;
+      }
+    }
+    setMine(byPost);
+    setPosts(loaded);
   }, []);
 
   useEffect(() => {
@@ -895,6 +929,9 @@ export default function Dashboard() {
         .eq("id", userId)
         .maybeSingle();
       if (!cancelled) setProfile(data);
+
+      const remote = await readRemotePreferences(userId);
+      if (!cancelled && remote) setPreferences(remote);
     })();
     return () => {
       cancelled = true;
@@ -904,6 +941,18 @@ export default function Dashboard() {
   }, [userId, loadPosts]);
 
   const closeModal = useCallback(() => setModalOpen(false), []);
+
+  // Recommended articles: a search on the chosen themes, or the general feed without any.
+  const query = themesQuery(preferences.themes);
+  const news = useNews(query ? { q: query } : { category: "Actualités" }, preferences.modules.actualites && Boolean(userId));
+
+  const handleSavePreferences = async (next: Preferences) => {
+    setPreferences(next);
+    const savedOnline = userId ? await savePreferences(userId, next) : false;
+    return savedOnline
+      ? "Préférences enregistrées."
+      : "Enregistrées sur cet appareil seulement : la sauvegarde sur ton profil a échoué.";
+  };
 
   // Nothing is shown until the session is confirmed, so a signed-out visitor
   // never sees the dashboard before being redirected.
@@ -916,26 +965,72 @@ export default function Dashboard() {
   const username = profile?.username ?? email?.split("@")[0] ?? "";
   const initials = getInitials(profile?.name ?? null, email);
 
-  // Real posts come first, always followed by the sample cards. The sample
-  // article only stands in while there is no real post yet.
-  const realPosts = (posts ?? []).map((post) => ({
-    key: post.id,
-    tags: postTags(post),
-    node: <PostCard post={post} />,
-  }));
-  const feedItems = [
-    ...(realPosts.length > 0
-      ? realPosts
-      : [{ key: "article", tags: ["Actualités"], node: <ArticleCard viewerInitials={initials} /> }]),
-    { key: "discovery", tags: ["Découvertes", "Philo"], node: <DiscoveryCard /> },
-    { key: "music", tags: ["Musique"], node: <MusicCard /> },
-    { key: "book", tags: ["Livres"], node: <BookCard /> },
-    { key: "podcast", tags: ["Podcasts"], node: <PodcastCard /> },
-  ];
+  type FeedItem = { key: string; tags: string[]; node: ReactNode };
+  const on = (moduleId: ModuleId) => preferences.modules[moduleId];
+  const typeModule: Partial<Record<PostType, ModuleId>> = { article: "actualites", musique: "musique", livre: "livres" };
+
+  // 1. Posts from Supabase (reflections are always shown, other types follow their module).
+  const postItems: FeedItem[] = (posts ?? [])
+    .filter((post) => {
+      const moduleId = typeModule[post.type];
+      return !moduleId || on(moduleId);
+    })
+    .map((post) => ({ key: post.id, tags: postTags(post), node: <PostCard post={post} /> }));
+  if (postItems.length === 0 && on("actualites")) {
+    // The sample article only stands in while there is no real post yet.
+    postItems.push({ key: "article", tags: ["Actualités"], node: <ArticleCard /> });
+  }
+
+  // 2. What the network is doing right now, then the sample shares.
+  const socialItems = ([
+    on("musique") && { key: "listening", tags: ["Musique"], node: <NowListeningCard /> },
+    on("livres") && { key: "reading", tags: ["Livres"], node: <ReadingNowCard /> },
+    on("reactions") && { key: "discussions", tags: [], node: <DiscussionsCard /> },
+    on("musique") && { key: "music", tags: ["Musique"], node: <MusicCard /> },
+    on("livres") && { key: "book", tags: ["Livres"], node: <BookCard /> },
+    on("podcasts") && { key: "podcast", tags: ["Podcasts"], node: <PodcastCard /> },
+  ] as (FeedItem | false)[]).filter((item): item is FeedItem => Boolean(item));
+
+  // 3. Articles matching the themes, and the markets flash.
+  const newsItems: FeedItem[] = [];
+  if (on("marches")) newsItems.push({ key: "markets", tags: ["Actualités"], node: <MarketsFlashCard /> });
+  if (on("actualites")) {
+    if (news.error) {
+      newsItems.push({ key: "news-error", tags: ["Actualités"], node: <NewsError onRetry={news.retry} /> });
+    } else if (news.loading || !news.articles) {
+      newsItems.push({ key: "news-loading", tags: ["Actualités"], node: <NewsSkeleton /> });
+    } else {
+      for (const article of news.articles.slice(0, NEWS_IN_FEED)) {
+        newsItems.push({
+          key: article.url,
+          tags: ["Actualités"],
+          node: <NewsCard article={article} user={session.user} onShared={loadPosts} />,
+        });
+      }
+    }
+  }
+
+  // 4. Recommendations.
+  const discoveryItems: FeedItem[] = on("decouvertes")
+    ? [{ key: "discovery", tags: ["Découvertes", "Philo"], node: <DiscoveryCard /> }]
+    : [];
+
+  const interleave = (first: FeedItem[], second: FeedItem[]) =>
+    Array.from({ length: Math.max(first.length, second.length) }, (_, index) => [first[index], second[index]])
+      .flat()
+      .filter((item): item is FeedItem => Boolean(item));
+
+  const feedItems =
+    preferences.order === "social"
+      ? [...postItems, ...socialItems, ...newsItems, ...discoveryItems]
+      : preferences.order === "actualites"
+        ? [...newsItems, ...postItems, ...socialItems, ...discoveryItems]
+        : [...postItems, ...interleave(socialItems, newsItems), ...discoveryItems];
   const isVisible = (tags: string[]) => filter === "Tout" || tags.includes(filter);
   const hasVisibleItem = feedItems.some((item) => isVisible(item.tags));
 
   return (
+    <SocialContext.Provider value={{ user: session.user, viewerName: profile?.name ?? null, mine }}>
     <div className="flex h-screen flex-col" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
       <style>{css}</style>
       <Navbar />
@@ -1021,6 +1116,24 @@ export default function Dashboard() {
 
           <Divider />
 
+          <SectionLabel>Qui est en ligne</SectionLabel>
+          <ul className="flex flex-col" style={{ gap: 8 }}>
+            {onlineNow.map((person) => (
+              <li key={person.initials} className="flex items-center gap-2">
+                <span className="relative shrink-0">
+                  <Avatar initials={person.initials} size={28} background={person.background} color={person.color} />
+                  <span className="absolute" style={{ right: -1, bottom: -1, width: 8, height: 8, background: "#1D9E75", borderRadius: "50%", border: `2px solid ${WHITE}` }} />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{person.name}</p>
+                  <p className="truncate" style={{ fontSize: 11, color: DIM }}>{person.activity}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <Divider />
+
           <SectionLabel>Mes espaces</SectionLabel>
           <div className="grid grid-cols-2" style={{ gap: 6 }}>
             {spaces.map((space) => {
@@ -1073,6 +1186,14 @@ export default function Dashboard() {
                     {item}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setCustomizerOpen(true)}
+                  className="db-hover ml-auto flex shrink-0 items-center"
+                  style={{ gap: 5, border: `1px solid ${black(0.1)}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, color: ink(0.5) }}
+                >
+                  <span aria-hidden>⚙️</span> Personnaliser
+                </button>
               </div>
             </div>
 
@@ -1112,7 +1233,9 @@ export default function Dashboard() {
                 ))}
                 {!hasVisibleItem && (
                   <p className="text-center" style={{ border: `1px dashed ${black(0.12)}`, borderRadius: 14, padding: "40px 20px", fontSize: 13, color: DIM }}>
-                    Rien dans « {filter} » pour l&apos;instant.
+                    {feedItems.length === 0
+                      ? "Tous les modules sont désactivés : réactive-en depuis « Personnaliser »."
+                      : `Rien dans « ${filter} » pour l'instant.`}
                   </p>
                 )}
               </>
@@ -1133,19 +1256,17 @@ export default function Dashboard() {
 
         {/* Right sidebar */}
         <aside className="hidden overflow-y-auto md:block" style={{ background: WHITE, borderLeft: `1px solid ${black(0.07)}`, padding: "20px 16px" }}>
-          <SectionLabel>Notifications</SectionLabel>
-          <ul className="flex flex-col" style={{ gap: 8 }}>
-            {notifications.map((notification) => (
+          <SectionLabel>Activité récente</SectionLabel>
+          <ul>
+            {recentActivity.map((item, index) => (
               <li
-                key={notification.text}
+                key={item.text}
                 className="flex items-start gap-2"
-                style={{ padding: 8, background: CREAM, borderRadius: 10, opacity: notification.unread ? 1 : 0.5 }}
+                style={{ padding: "7px 0", borderBottom: index < recentActivity.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
               >
-                <span className="mt-1 shrink-0" style={{ width: 6, height: 6, borderRadius: "50%", background: notification.unread ? INDIGO : "transparent" }} />
-                <div>
-                  <p style={{ fontSize: 11, color: TEXT, lineHeight: 1.4 }}>{notification.text}</p>
-                  <p className="mt-1" style={{ fontSize: 10, color: DIM }}>{notification.time}</p>
-                </div>
+                <span aria-hidden className="shrink-0" style={{ fontSize: 14, lineHeight: 1.2 }}>{item.icon}</span>
+                <p className="min-w-0" style={{ fontSize: 11, color: TEXT, lineHeight: 1.4 }}>{item.text}</p>
+                <span className="ml-auto shrink-0" style={{ fontSize: 10, color: DIM }}>{item.time}</span>
               </li>
             ))}
           </ul>
@@ -1166,10 +1287,6 @@ export default function Dashboard() {
             ))}
           </ul>
 
-          <Divider />
-
-          <SectionLabel>Quiz du jour</SectionLabel>
-          <Quiz />
 
           <Divider />
 
@@ -1250,6 +1367,10 @@ export default function Dashboard() {
           }}
         />
       )}
+      {customizerOpen && (
+        <Customizer initial={preferences} onClose={() => setCustomizerOpen(false)} onSave={handleSavePreferences} />
+      )}
     </div>
+    </SocialContext.Provider>
   );
 }

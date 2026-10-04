@@ -4,6 +4,9 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import Navbar, { getInitials } from "@/components/Navbar";
+import SharedMusicCard from "@/components/MusicCard";
+import { fetchRecentTracks, playedAgo, type LastfmTrack } from "@/lib/lastfm";
+import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
 import { avatarTones, contacts, notifications, trends } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase";
 
@@ -48,6 +51,8 @@ type Post = {
   category: string | null;
   likes_count: number | null;
   created_at: string;
+  /** Music link details; only once the metadata column exists. */
+  metadata?: unknown;
 };
 
 type Book = {
@@ -59,15 +64,7 @@ type Book = {
   page_total: number | null;
 };
 
-type GameScore = {
-  id: string;
-  game_type: string;
-  score: number;
-  streak: number | null;
-  played_at: string;
-};
-
-const tabs = ["Partages", "Musique", "Livres", "Jeux", "Sauvegardés"];
+const tabs = ["Partages", "Musique", "Livres", "Sauvegardés"];
 
 // Shown while the matching profile fields are still empty in Supabase.
 const FALLBACK_LOCATION = "Paris";
@@ -138,24 +135,12 @@ const samplePosts = [
   },
 ];
 
-const quizHistory = [
-  { question: "Quel philosophe a théorisé la volonté de puissance ?", answer: "Nietzsche" },
-  { question: "Premier empire à utiliser la route de la soie ?", answer: "Han" },
-  { question: "Quel pays a inventé le billet de banque ?", answer: "Chine" },
-  { question: "Capitale de l'empire byzantin jusqu'en 1453 ?", answer: "Constantinople" },
-];
-
 const similarProfiles = [
   { initials: "NL", name: "Nicolas L.", tags: "Histoire · Philo · Géopo", ...avatarTones[5] },
   { initials: "AV", name: "Amira V.", tags: "Science · Tech · Podcast", ...avatarTones[0] },
   { initials: "PG", name: "Paul G.", tags: "Géopo · Art · Cinéma", ...avatarTones[2] },
   { initials: "CM", name: "Clara M.", tags: "Science · Histoire", ...avatarTones[4] },
 ];
-
-const gameNames: Record<string, string> = {
-  "mot-fantome": "Mot Fantôme",
-  geoblitz: "GéoBlitz",
-};
 
 const card: CSSProperties = {
   background: WHITE,
@@ -256,6 +241,31 @@ function PostHeader({ category, when }: { category: string | null; when: string 
   );
 }
 
+/** A shared music post as a compact card; looks the link up again when no metadata was saved. */
+function MusicShare({ post }: { post: Post }) {
+  const [embed, setEmbed] = useState<MusicEmbed | null>(() => parseEmbed(post.metadata));
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (embed || !post.url) return;
+    let cancelled = false;
+    fetchEmbed(post.url)
+      .then((result) => {
+        if (!cancelled) setEmbed(result);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [embed, post.url]);
+
+  if (embed) return <SharedMusicCard embed={embed} href={post.url} compact />;
+  if (failed || !post.url) return null;
+  return <div aria-hidden className="animate-pulse" style={{ height: 54, background: black(0.05), borderRadius: 12 }} />;
+}
+
 function Empty({ children }: { children: ReactNode }) {
   return (
     <p className="text-center" style={{ border: `1px dashed ${black(0.12)}`, borderRadius: 14, padding: "40px 20px", fontSize: 13, color: DIM }}>
@@ -271,8 +281,9 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
-  const [scores, setScores] = useState<GameScore[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Latest Last.fm tracks; null when no account is linked (the sample tracks show instead).
+  const [recentTracks, setRecentTracks] = useState<LastfmTrack[] | null>(null);
   const [tab, setTab] = useState("Partages");
   const [followed, setFollowed] = useState<string[]>([]);
   const [activeInterest, setActiveInterest] = useState<string | null>(null);
@@ -302,20 +313,29 @@ export default function ProfilePage() {
     let cancelled = false;
 
     (async () => {
-      const [profileResult, postsResult, booksResult, scoresResult] = await Promise.all([
+      const [profileResult, postsResult, booksResult] = await Promise.all([
         supabase.from("profiles").select("username, name, bio, location, interests").eq("id", userId).maybeSingle(),
-        supabase.from("posts").select("id, type, content, url, category, likes_count, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+        supabase.from("posts").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
         supabase.from("books").select("id, title, author, status, page_current, page_total").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
-        supabase.from("game_scores").select("id, game_type, score, streak, played_at").eq("user_id", userId).order("played_at", { ascending: false }).limit(8),
       ]);
       if (cancelled) return;
 
-      const firstError = [profileResult, postsResult, booksResult, scoresResult].find((result) => result.error)?.error;
+      const firstError = [profileResult, postsResult, booksResult].find((result) => result.error)?.error;
       setLoadError(firstError?.message ?? null);
       setProfile(profileResult.data);
       setPosts((postsResult.data as Post[] | null) ?? []);
       setBooks((booksResult.data as Book[] | null) ?? []);
-      setScores((scoresResult.data as GameScore[] | null) ?? []);
+
+      // Read on its own: the column only exists once the migration has run.
+      const { data: music } = await supabase.from("profiles").select("lastfm_username").eq("id", userId).maybeSingle();
+      if (music?.lastfm_username) {
+        try {
+          const tracks = await fetchRecentTracks(music.lastfm_username, 3);
+          if (!cancelled && tracks.length > 0) setRecentTracks(tracks);
+        } catch {
+          // Last.fm unreachable: keep the sample tracks.
+        }
+      }
     })();
 
     return () => {
@@ -364,18 +384,30 @@ export default function ProfilePage() {
     </section>
   );
 
+  const musicPosts = posts.filter((post) => post.type === "musique");
+
+  const trackRows = recentTracks
+    ? recentTracks.slice(0, 3).map((track, index) => ({
+        key: `${track.name}-${index}`,
+        title: track.name,
+        artist: track.nowPlaying ? `${track.artist} · en ce moment` : `${track.artist} · ${playedAgo(track)}`,
+        color: tracks[index % tracks.length].color,
+        nowPlaying: track.nowPlaying,
+      }))
+    : tracks.map((track) => ({ key: track.title, title: track.title, artist: track.artist, color: track.color, nowPlaying: false }));
+
   const musicCard = (
     <section style={card}>
-      <SectionLabel>Écouté récemment</SectionLabel>
+      <SectionLabel>{recentTracks ? "Écouté récemment · Last.fm" : "Écouté récemment"}</SectionLabel>
       <ul>
-        {tracks.map((track, index) => (
+        {trackRows.map((track, index) => (
           <li
-            key={track.title}
+            key={track.key}
             className="flex items-center"
-            style={{ padding: "8px 0", gap: 10, borderBottom: index < tracks.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
+            style={{ padding: "8px 0", gap: 10, borderBottom: index < trackRows.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
           >
             <span className="flex shrink-0 items-center justify-center" style={{ width: 32, height: 32, background: track.color, borderRadius: 7, fontSize: 12 }}>
-              🎵
+              {track.nowPlaying ? "🔊" : "🎵"}
             </span>
             <div className="min-w-0">
               <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{track.title}</p>
@@ -424,57 +456,6 @@ export default function ProfilePage() {
             </article>
           ))}
     </div>
-  );
-
-  const gamesCard = (
-    <section style={card}>
-      {scores.length > 0 ? (
-        <>
-          <SectionLabel>Scores récents</SectionLabel>
-          <ul>
-            {scores.map((score, index) => (
-              <li
-                key={score.id}
-                className="flex items-center justify-between gap-3"
-                style={{ padding: "8px 0", borderBottom: index < scores.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
-              >
-                <div className="min-w-0">
-                  <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>
-                    {gameNames[score.game_type] ?? score.game_type}
-                  </p>
-                  <p style={{ fontSize: 10, color: DIM }}>
-                    Joué {timeAgo(score.played_at)}
-                    {score.streak ? ` · série ${score.streak}j` : ""}
-                  </p>
-                </div>
-                <span style={{ fontFamily: GEORGIA, fontSize: 16, color: GOLD }}>{score.score}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <>
-          <SectionLabel>Quiz récents</SectionLabel>
-          <div className="grid grid-cols-1 sm:grid-cols-2">
-            {quizHistory.map((quiz, index) => (
-              <div
-                key={quiz.question}
-                style={{
-                  padding: 10,
-                  borderTop: index >= 2 ? `1px solid ${black(0.05)}` : "none",
-                  borderLeft: index % 2 === 1 ? `1px solid ${black(0.05)}` : "none",
-                }}
-              >
-                <p style={{ fontSize: 11, fontWeight: 500, color: TEXT, lineHeight: 1.35 }}>{quiz.question}</p>
-                <span className="mt-2 inline-block" style={{ fontSize: 10, background: "#EEEDFE", color: "#534AB7", borderRadius: 6, padding: "2px 7px" }}>
-                  {quiz.answer}
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </section>
   );
 
   return (
@@ -572,12 +553,19 @@ export default function ProfilePage() {
                 {musicCard}
               </div>
               {postsFeed}
-              <div style={{ marginTop: 10 }}>{gamesCard}</div>
             </>
           )}
-          {tab === "Musique" && musicCard}
+          {tab === "Musique" &&
+            (musicPosts.length === 0 ? (
+              <Empty>Tu n&apos;as pas encore partagé de musique — colle un lien depuis ton dashboard</Empty>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 10 }}>
+                {musicPosts.map((post) => (
+                  <MusicShare key={post.id} post={post} />
+                ))}
+              </div>
+            ))}
           {tab === "Livres" && booksCard}
-          {tab === "Jeux" && gamesCard}
           {tab === "Sauvegardés" && <Empty>Rien de sauvegardé pour l&apos;instant.</Empty>}
         </main>
 

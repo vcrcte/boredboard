@@ -6,7 +6,19 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-const navLinks = ["Explorer", "Fonctionnalités", "Manifeste"];
+const memberLinks = [
+  // Highlighted in the logo's blue: the member's home.
+  { label: "Board", href: "/dashboard", highlight: true },
+  { label: "Actualités", href: "/actualites" },
+  { label: "Explorer", href: "#" },
+];
+
+// Visitors get the landing page's sections instead.
+const visitorLinks = [
+  { label: "Explorer", href: "#" },
+  { label: "Fonctionnalités", href: "/#fonctionnalites" },
+  { label: "Manifeste", href: "/#manifeste" },
+];
 
 const menuLinks = [
   { label: "Mon profil", href: "/profile" },
@@ -99,11 +111,19 @@ export default function Navbar() {
           <Logo />
         </Link>
         <ul className="hidden items-center gap-8 md:flex">
-          {navLinks.map((link) => (
-            <li key={link}>
-              <a href="#" className="text-[13px] text-[#888780] transition-colors hover:text-[#2A3560]">
-                {link}
-              </a>
+          {/* Nothing until the session is known, so visitors and members never see the other set flash. */}
+          {(session === undefined ? [] : session ? memberLinks : visitorLinks).map((link) => (
+            <li key={link.label}>
+              <Link
+                href={link.href}
+                className={`text-[13px] transition-colors ${
+                  "highlight" in link && link.highlight
+                    ? "font-semibold text-[#2A3560] hover:text-[#3D4F8C]"
+                    : "text-[#888780] hover:text-[#2A3560]"
+                }`}
+              >
+                {link.label}
+              </Link>
             </li>
           ))}
         </ul>
@@ -111,7 +131,7 @@ export default function Navbar() {
           {session === null && (
             <>
               <Link href="/login" className="hidden rounded-md border border-[#E8E8E8] px-3.5 py-1.5 text-[13px] text-[#2A3560] transition-colors hover:border-[#2A3560] sm:block">
-                Se connecter
+                Connexion
               </Link>
               <Link href="/signup" className="rounded-md bg-[#2A3560] px-3.5 py-1.5 text-[13px] text-white transition-colors hover:bg-[#3D4F8C]">
                 Rejoindre

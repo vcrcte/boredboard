@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>BoredBoard Music</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <span class="logo"><span class="bored">Bored</span><span class="board">Board</span></span>
+      <span class="tag">Music</span>
+    </header>
+
+    <!-- Signed out -->
+    <section id="login-view" hidden>
+      <p class="intro">Connecte-toi à ton compte BoredBoard pour partager ce que tu écoutes.</p>
+      <form id="login-form">
+        <input id="email" type="email" placeholder="Adresse email" autocomplete="email" required />
+        <input id="password" type="password" placeholder="Mot de passe" autocomplete="current-password" required />
+        <button type="submit" class="primary" id="login-button">Se connecter</button>
+        <p class="error" id="login-error" role="alert" hidden></p>
+      </form>
+      <p class="small">Pas encore de compte ? <a id="signup-link" href="#" target="_blank" rel="noopener">Rejoindre</a></p>
+    </section>
+
+    <!-- Signed in -->
+    <section id="share-view" hidden>
+      <div id="track" class="track" hidden>
+        <img id="track-cover" class="cover" alt="" hidden />
+        <div class="cover placeholder" id="track-cover-placeholder">🎵</div>
+        <div class="track-text">
+          <span id="track-platform" class="platform"></span>
+          <p id="track-title" class="title"></p>
+          <p id="track-artist" class="artist"></p>
+        </div>
+      </div>
+      <p id="no-track" class="empty" hidden></p>
+
+      <form id="share-form">
+        <textarea id="comment" rows="3" placeholder="Dis-nous pourquoi tu partages ça..."></textarea>
+        <button type="submit" class="primary" id="share-button" disabled>Partager sur BoredBoard</button>
+        <p class="error" id="share-error" role="alert" hidden></p>
+        <p class="success" id="share-success" role="status" hidden>
+          ✓ Partagé ! <a id="dashboard-link" href="#" target="_blank" rel="noopener">Voir sur BoredBoard →</a>
+        </p>
+      </form>
+
+      <footer class="footer">
+        <span id="account" class="small"></span>
+        <button type="button" id="logout" class="link">Déconnexion</button>
+      </footer>
+    </section>
+
+    <script src="config.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

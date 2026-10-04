@@ -24,6 +24,52 @@ export const notifications = [
   { text: "Nina te suit maintenant", time: "3h", unread: false },
 ];
 
+// "Who is online" in the dashboard: simulated until presence is tracked.
+export const onlineNow = [
+  { ...contacts[0], activity: "lit Le Monde" },
+  { ...contacts[1], activity: "dans le dashboard" },
+  { ...contacts[4], activity: "écoute Spotify" },
+];
+
+export const listeningNow = [
+  { ...contacts[2], track: "Nespole", artist: "Floating Points" },
+  { ...contacts[1], track: "Says", artist: "Nils Frahm" },
+  { ...contacts[4], track: "Gymnopédie n°1", artist: "Erik Satie" },
+];
+
+export const readingNow = [
+  { reader: contacts[3], firstName: "Jules", title: "Sapiens", spine: "#EEEDFE" },
+  { reader: contacts[2], firstName: "Léa", title: "Les Années", spine: "#E1F5EE" },
+  { reader: contacts[1], firstName: "Marc", title: "L'Étranger", spine: "#FAEEDA" },
+  { reader: contacts[4], firstName: "Nina", title: "Le Problème à trois corps", spine: "#FBEAF0" },
+];
+
+export const discussions = [
+  {
+    author: contacts[1],
+    excerpt: "Le parallèle avec 1996 est frappant — même si les rapports de force ont radicalement changé.",
+    article: "Détroit de Taïwan : une nouvelle grammaire de la tension",
+  },
+  {
+    author: contacts[0],
+    excerpt: "Marc Aurèle en pleine crise d'attention, ça fonctionne étonnamment bien.",
+    article: "Le stoïcisme comme antidote au monde hyperconnecté",
+  },
+  {
+    author: contacts[4],
+    excerpt: "L'épisode sur l'eau est le meilleur de la saison, de loin.",
+    article: "L'eau, nouvelle arme géopolitique",
+  },
+];
+
+export const recentActivity = [
+  { icon: "🎵", text: "Léa a partagé « Nespole »", time: "5 min" },
+  { icon: "📖", text: "Jules a commencé « Sapiens »", time: "12 min" },
+  { icon: "❤️", text: "Marc a liké ton article", time: "18 min" },
+  { icon: "🔗", text: "Sophie a partagé un article", time: "32 min" },
+  { icon: "📖", text: "Nina a terminé « L'Étranger »", time: "1h" },
+];
+
 export const trends = [
   { topic: "Géopolitique de l'eau", count: "2.4k" },
   { topic: "Stoïcisme & burnout", count: "1.8k" },

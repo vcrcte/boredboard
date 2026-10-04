@@ -2,16 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The site has a single light theme: no dark-mode override, so a reader with a
+   dark system theme never sees a black band when scrolling past the content. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f7f4ee;
+  --foreground: #1c1a15;
 }
 
 body {

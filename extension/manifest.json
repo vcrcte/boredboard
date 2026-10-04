@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "BoredBoard Music",
+  "version": "1.0.0",
+  "description": "Partage ta musique sur BoredBoard en un clic",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": [
+    "https://open.spotify.com/*",
+    "https://music.apple.com/*",
+    "https://www.deezer.com/*",
+    "https://music.youtube.com/*",
+    "https://boredboard.vercel.app/*",
+    "http://localhost:3000/*",
+    "https://lwuaalmsruoaasvuewnl.supabase.co/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://open.spotify.com/*"],
+      "js": ["content/common.js", "content/spotify.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.apple.com/*"],
+      "js": ["content/common.js", "content/apple-music.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.deezer.com/*"],
+      "js": ["content/common.js", "content/deezer.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["content/common.js", "content/youtube-music.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["config.js", "background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "music@boredboard.app",
+      "strict_min_version": "121.0"
+    }
+  }
+}

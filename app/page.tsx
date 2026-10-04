@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 // The hero keeps the dark palette; everything after it is on warm cream.
 const HERO_BG = "#0A0910";
@@ -607,6 +608,13 @@ function FeatureRow({
 
 export default function Home() {
   const router = useRouter();
+
+  // A signed-in visitor goes straight to their dashboard.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace("/dashboard");
+    });
+  }, [router]);
 
   const handleJoin = (event: FormEvent) => {
     event.preventDefault();
