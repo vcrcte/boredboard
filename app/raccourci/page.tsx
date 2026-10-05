@@ -86,6 +86,7 @@ export default function Raccourci() {
   const [install, setInstall] = useState<Install | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
   // Whether this server can sign a personalised Shortcut (only when it runs on a Mac).
   const [signing, setSigning] = useState(false);
@@ -105,14 +106,20 @@ export default function Raccourci() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const start = async () => {
-    if (!session) return;
-    setBusy(true);
+  const handleInstall = async () => {
     setError(null);
+    setNotice(null);
+    // The site's session lives in the browser: without this header the routes answer 401.
+    if (!session) {
+      setError("Connecte-toi d'abord pour installer le Raccourci.");
+      return;
+    }
+    setBusy(true);
     try {
+      // /api/shortcuts/install returns the token (as /api/shortcuts/token does) plus the guided steps.
       const res = await fetch("/api/shortcuts/install", { headers: { Authorization: `Bearer ${session.access_token}` } });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? `Erreur ${res.status}`);
+      if (!res.ok || !data.token) throw new Error(data.error ?? `Erreur ${res.status} — assure-toi d'être connecté`);
       const result = data as Install;
       // Kept on this device, for the test button after a reload. Each click
       // issues a new token, which disconnects a Shortcut set up before.
@@ -121,18 +128,23 @@ export default function Raccourci() {
       } catch {
         // Not kept on this device: harmless.
       }
-      // Copied now, while the click still counts as a user gesture: the
-      // Shortcut asks for it once, at install.
       await navigator.clipboard.writeText(result.token).catch(() => undefined);
       setInstall(result);
+
       if (signing) {
         // The file comes with the token inside: on iPhone, iOS offers to open it in Shortcuts.
+        setNotice("Téléchargement du Raccourci…");
         window.location.href = `/api/shortcuts/download?token=${encodeURIComponent(result.token)}`;
       } else if (result.shortcutUrl) {
         window.open(result.shortcutUrl, "_blank", "noopener,noreferrer");
+        setNotice("Le Raccourci s'ouvre dans un nouvel onglet : colle ton token quand il le demande (il est copié).");
+      } else {
+        // This server can't sign a personalised file (only a Mac can): show the guided set-up.
+        setNotice("Ton token est prêt et copié. Suis les 3 étapes ci-dessous pour créer le Raccourci.");
+        setTimeout(() => document.getElementById("guided-setup")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Installation impossible.");
+      setError(caught instanceof Error ? caught.message : "Erreur — assure-toi d'être connecté");
     }
     setBusy(false);
   };
@@ -176,7 +188,7 @@ export default function Raccourci() {
           ) : (
             <button
               type="button"
-              onClick={start}
+              onClick={handleInstall}
               disabled={!session || busy}
               className="mt-5 transition hover:brightness-125 disabled:opacity-50"
               style={{ background: INDIGO, color: CREAM, borderRadius: 24, padding: "14px 28px", fontWeight: 500, fontSize: 15 }}
@@ -188,6 +200,7 @@ export default function Raccourci() {
             <p className="mt-2" style={{ fontSize: 12, color: DIM }}>Le raccourci sera configuré automatiquement avec ton compte</p>
           )}
           {error && <p role="alert" className="mt-3" style={{ fontSize: 12, color: RED }}>{error}</p>}
+          {notice && !error && <p role="status" className="mt-3" style={{ fontSize: 12, color: GREEN }}>{notice}</p>}
 
           <InstallAnimation />
           <p className="mt-2" style={{ fontSize: 10, color: DIM }}>Illustration</p>
@@ -198,7 +211,7 @@ export default function Raccourci() {
 
         {/* Until the shared Shortcut is published: build it in four guided steps. */}
         {install && !install.shortcutUrl && !signing && (
-          <section className="mt-4" style={card}>
+          <section id="guided-setup" className="mt-4" style={{ ...card, scrollMarginTop: 72 }}>
             <h2 style={{ fontSize: 15, fontWeight: 500 }}>Crée-le en 1 minute</h2>
             <p className="mt-1" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
               Le Raccourci prêt à installer arrive bientôt. En attendant, ouvre l&apos;app Raccourcis, touche « + », puis ajoute ces actions dans l&apos;ordre.
