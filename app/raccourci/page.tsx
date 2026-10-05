@@ -15,9 +15,9 @@ const GEORGIA = "Georgia, 'Times New Roman', serif";
 const DIM = "rgba(28,26,21,0.45)";
 const GREEN = "#16A34A";
 const RED = "#C0392B";
-const SHORTCUT_ICLOUD_URL = "https://www.icloud.com/shortcuts/95743782176c478485d046eb866a95e2";
+const SHORTCUT_ICLOUD_URL = "https://www.icloud.com/shortcuts/3025a45a81ac4b83951d76aca9ffa814";
 // Second Shortcut, from the share sheet: it sends the shared link to the same route.
-const SHORTCUT_SHARE_URL = "https://www.icloud.com/shortcuts/8c266e2d87a44949919fee8599228760";
+const SHORTCUT_SHARE_URL = "https://www.icloud.com/shortcuts/b217b911bcc14177b3347b4b40f794dc";
 
 const sharePlatforms = [
   { label: "Spotify", background: "rgba(30,215,96,0.08)", color: "#1DB954" },
