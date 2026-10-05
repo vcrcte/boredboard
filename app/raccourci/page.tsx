@@ -87,6 +87,15 @@ export default function Raccourci() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
+  // Whether this server can sign a personalised Shortcut (only when it runs on a Mac).
+  const [signing, setSigning] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/shortcuts/download?check=1")
+      .then((res) => res.json())
+      .then((data) => setSigning(Boolean(data.signing)))
+      .catch(() => setSigning(false));
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -116,7 +125,12 @@ export default function Raccourci() {
       // Shortcut asks for it once, at install.
       await navigator.clipboard.writeText(result.token).catch(() => undefined);
       setInstall(result);
-      if (result.shortcutUrl) window.open(result.shortcutUrl, "_blank", "noopener,noreferrer");
+      if (signing) {
+        // The file comes with the token inside: on iPhone, iOS offers to open it in Shortcuts.
+        window.location.href = `/api/shortcuts/download?token=${encodeURIComponent(result.token)}`;
+      } else if (result.shortcutUrl) {
+        window.open(result.shortcutUrl, "_blank", "noopener,noreferrer");
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Installation impossible.");
     }
@@ -167,8 +181,11 @@ export default function Raccourci() {
               className="mt-5 transition hover:brightness-125 disabled:opacity-50"
               style={{ background: INDIGO, color: CREAM, borderRadius: 24, padding: "14px 28px", fontWeight: 500, fontSize: 15 }}
             >
-              {busy ? "Préparation…" : "📲 Installer en 1 tap"}
+              {busy ? "Préparation…" : signing ? "📲 Télécharger mon Raccourci personnalisé" : "📲 Installer en 1 tap"}
             </button>
+          )}
+          {signing && session && (
+            <p className="mt-2" style={{ fontSize: 12, color: DIM }}>Le raccourci sera configuré automatiquement avec ton compte</p>
           )}
           {error && <p role="alert" className="mt-3" style={{ fontSize: 12, color: RED }}>{error}</p>}
 
@@ -180,7 +197,7 @@ export default function Raccourci() {
         </section>
 
         {/* Until the shared Shortcut is published: build it in four guided steps. */}
-        {install && !install.shortcutUrl && (
+        {install && !install.shortcutUrl && !signing && (
           <section className="mt-4" style={card}>
             <h2 style={{ fontSize: 15, fontWeight: 500 }}>Crée-le en 1 minute</h2>
             <p className="mt-1" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
