@@ -6,15 +6,24 @@ export async function POST(request: Request) {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     )
 
     const body = await request.json()
     const { title, artist, album, platform, token } = body
 
     // Debug: the token is cut short so the server logs never hold a usable one.
-    console.log('SERVICE_ROLE exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-    console.log('Token reçu:', token ? `${String(token).slice(0, 8)}… (${String(token).length} caractères)` : token)
+    const shortToken = token ? `${String(token).slice(0, 8)}… (${String(token).length} caractères)` : token
+    console.log('=== SHORTCUTS DEBUG ===')
+    console.log('Body reçu:', JSON.stringify({ ...body, token: shortToken }))
+    console.log('Token reçu:', shortToken)
+    console.log('SERVICE_KEY présente:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
 
     if (!token) return NextResponse.json({ error: 'Token requis' }, { status: 401 })
     // A Shortcut run while nothing plays sends an empty (or non-text) title: share anyway.
@@ -29,6 +38,7 @@ export async function POST(request: Request) {
       .in('token', [hash, token])
       .limit(1)
       .maybeSingle()
+    console.log('Résultat Supabase:', JSON.stringify({ tokenData, tokenError }))
 
     if (tokenError || !tokenData) {
       return NextResponse.json({ 
