@@ -484,6 +484,117 @@ function PodcastCard() {
   );
 }
 
+/** What the Apple Shortcut saves with a post (app/api/shortcuts/music/route.ts). */
+type ShortcutTrack = {
+  title: string;
+  artist: string | null;
+  album: string | null;
+  platform: keyof typeof musicPlatforms | null;
+  artwork: string | null;
+  trackUrl: string | null;
+};
+
+const musicPlatforms = {
+  "apple-music": { label: "Apple Music", color: "#FC3C44", background: "rgba(252,60,68,0.08)" },
+  spotify: { label: "Spotify", color: "#1DB954", background: "rgba(30,215,96,0.08)" },
+  deezer: { label: "Deezer", color: "#EF6400", background: "rgba(239,100,0,0.08)" },
+  youtube: { label: "YouTube", color: "#FF0000", background: "rgba(255,0,0,0.08)" },
+};
+
+function httpsOrNull(value: unknown) {
+  return typeof value === "string" && value.startsWith("https://") ? value : null;
+}
+
+function textOrNull(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** Shortcut posts only: link posts carry an embed_url and use the player card. */
+function parseShortcutTrack(value: unknown): ShortcutTrack | null {
+  const raw = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const title = textOrNull(raw?.title);
+  if (!raw || !title || "embed_url" in raw) return null;
+  // Shortcuts send "apple", "apple music" or "apple-music": compare letters only.
+  const key = String(raw.platform ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  const platform =
+    key === "apple" || key === "applemusic"
+      ? "apple-music"
+      : key === "spotify" || key === "deezer" || key === "youtube"
+        ? key
+        : key === "youtubemusic"
+          ? "youtube"
+          : null;
+  return {
+    title,
+    artist: textOrNull(raw.artist),
+    album: textOrNull(raw.album),
+    platform,
+    artwork: httpsOrNull(raw.artwork),
+    trackUrl: httpsOrNull(raw.trackUrl),
+  };
+}
+
+function ShortcutTrackCard({ post, track }: { post: Post; track: ShortcutTrack }) {
+  const author = post.profiles;
+  const tone = avatarTones[(post.user_id.charCodeAt(0) + post.user_id.charCodeAt(1)) % avatarTones.length];
+  const platform = track.platform ? musicPlatforms[track.platform] : null;
+  // Without a comment the Shortcut stores "J'écoute …": no need to repeat the title.
+  const comment = post.content && !post.content.startsWith("J'écoute") ? post.content : null;
+  // An artwork link that no longer loads falls back to the music icon.
+  const [artworkFailed, setArtworkFailed] = useState(false);
+
+  const info = (
+    <>
+      <span className="flex shrink-0 items-center justify-center overflow-hidden" style={{ width: 56, height: 56, borderRadius: 10, background: "rgba(131,77,255,0.1)" }}>
+        {track.artwork && !artworkFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={track.artwork} alt="" width={56} height={56} onError={() => setArtworkFailed(true)} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10 }} />
+        ) : (
+          <span aria-hidden style={{ fontSize: 24, color: platform?.color ?? "#534AB7" }}>🎵</span>
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate" style={{ fontSize: 15, fontWeight: 500, color: TEXT }}>{track.title}</span>
+        {track.artist && <span className="block truncate" style={{ fontSize: 13, color: ink(0.5) }}>{track.artist}</span>}
+        {track.album && <span className="block truncate" style={{ fontSize: 12, color: ink(0.35), fontStyle: "italic" }}>{track.album}</span>}
+      </span>
+      {platform && (
+        <span className="ml-auto shrink-0" style={{ fontSize: 10, borderRadius: 6, padding: "3px 8px", color: platform.color, background: platform.background }}>
+          {platform.label}
+        </span>
+      )}
+    </>
+  );
+  const playerStyle: CSSProperties = { background: CREAM, borderRadius: 12, padding: 14, gap: 14 };
+
+  return (
+    <article className="db-card" style={card}>
+      <CardHeader
+        avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={30} {...tone} />}
+        name={author?.name ?? author?.username ?? "Quelqu'un"}
+        verb="partage une musique"
+        pill={<span className="shrink-0" style={{ fontSize: 10, borderRadius: 10, padding: "2px 8px", background: "rgba(131,77,255,0.08)", color: "#6B3FD4" }}>Musique</span>}
+        time={timeAgo(post.created_at)}
+      />
+      {track.trackUrl ? (
+        <a href={track.trackUrl} target="_blank" rel="noopener noreferrer" className="db-action mt-3 flex items-center" style={playerStyle} aria-label={`Écouter ${track.title}`}>
+          {info}
+        </a>
+      ) : (
+        <div className="mt-3 flex items-center" style={playerStyle}>{info}</div>
+      )}
+      {comment && (
+        <p className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: 13, color: ink(0.6), fontStyle: "italic", lineHeight: 1.6 }}>
+          {comment}
+        </p>
+      )}
+      <div className="mt-3">
+        <Actions postId={post.id} likes={post.likes_count ?? 0} comments={0} extra="↗ Partager" />
+      </div>
+    </article>
+  );
+}
+
 /** Metadata saved with the post, or looked up again from its link (posts made before the metadata column). */
 function usePostEmbed(post: Post) {
   const stored = post.type === "musique" ? parseEmbed(post.metadata) : null;
@@ -509,6 +620,11 @@ function usePostEmbed(post: Post) {
 }
 
 function PostCard({ post }: { post: Post }) {
+  const track = post.type === "musique" ? parseShortcutTrack(post.metadata) : null;
+  return track ? <ShortcutTrackCard post={post} track={track} /> : <LinkPostCard post={post} />;
+}
+
+function LinkPostCard({ post }: { post: Post }) {
   const embed = usePostEmbed(post);
   const author = post.profiles;
   const type = postTypes.find((item) => item.value === post.type);

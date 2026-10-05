@@ -22,6 +22,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
     }
 
+    // Artwork and Apple Music link from the iTunes Search API (free, no key).
+    // A slow or failed lookup only leaves them out.
+    let artwork: string | null = null
+    let trackUrl: string | null = null
+    if (title) {
+      try {
+        const searchRes = await fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(titleValue + ' ' + (artist || ''))}&media=music&country=FR&limit=1`,
+          { signal: AbortSignal.timeout(3000) }
+        )
+        const searchData = await searchRes.json()
+        artwork = searchData.results?.[0]?.artworkUrl100?.replace('100x100', '300x300') || null
+        trackUrl = searchData.results?.[0]?.trackViewUrl || null
+      } catch {
+        // No artwork: the card shows its music icon.
+      }
+    }
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -38,7 +56,7 @@ export async function POST(request: Request) {
       type: 'musique',
       content: artist ? `J'écoute "${titleValue}" — ${artist}` : `J'écoute "${titleValue}"`,
       category: 'Musique',
-      metadata: { title: titleValue, artist, album, platform: platform || 'apple-music' },
+      metadata: { title: titleValue, artist, album, platform: platform || 'apple-music', artwork, trackUrl },
       likes_count: 0
     })
 
