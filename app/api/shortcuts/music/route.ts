@@ -29,30 +29,43 @@ export async function POST(request: Request) {
     // A Shortcut run while nothing plays sends an empty (or non-text) title: share anyway.
     const titleValue = (typeof title === 'string' && title.trim()) || 'Titre inconnu'
 
-    // Tokens from /raccourci (and the downloaded Shortcut) are stored as their
-    // SHA-256; one typed into the table by hand is stored as is.
+    // Debug: every stored token is compared here, but none is ever logged or
+    // returned: this route is public, and a token is enough to post as its owner.
+    // Tokens from /raccourci are stored as their SHA-256; one typed into the
+    // table by hand is stored as is.
     const hash = createHash('sha256').update(String(token)).digest('hex')
-    const { data: tokenData, error: tokenError } = await supabase
+    const { data: allTokens, error: tokenError } = await supabase
       .from('shortcut_tokens')
-      .select('user_id')
-      .in('token', [hash, token])
-      .limit(1)
-      .maybeSingle()
-    console.log('Résultat Supabase:', JSON.stringify({ tokenData, tokenError }))
+      .select('token, user_id')
 
-    if (tokenError || !tokenData) {
-      return NextResponse.json({ 
-        error: `Token invalide`,
-        debug: tokenError?.message
+    const formats = (allTokens ?? []).map((row) => (/^[0-9a-f]{64}$/.test(row.token) ? 'empreinte' : 'texte'))
+    const matchedToken = allTokens?.find((row) => row.token === token || row.token === hash)
+
+    console.log('Tokens en base:', allTokens?.length ?? 0, JSON.stringify(formats))
+    console.log('Token cherché:', shortToken)
+    console.log('Match trouvé:', matchedToken ? `oui (${matchedToken.token === hash ? 'empreinte' : 'texte'})` : 'non')
+
+    if (tokenError || !matchedToken) {
+      return NextResponse.json({
+        error: 'Token invalide',
+        debug: {
+          tokenRecu: shortToken,
+          tokensEnBase: allTokens?.length ?? 0,
+          formatsEnBase: formats,
+          erreurSupabase: tokenError?.message ?? null
+        }
       }, { status: 401 })
     }
+
+    // Uses the user_id found
+    const userId = matchedToken.user_id
 
     const content = artist 
       ? `J'écoute "${titleValue}" — ${artist}` 
       : `J'écoute "${titleValue}"`
 
     const post = {
-      user_id: tokenData.user_id,
+      user_id: userId,
       type: 'musique',
       content,
       category: 'Musique',
