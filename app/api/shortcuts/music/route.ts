@@ -29,36 +29,20 @@ export async function POST(request: Request) {
     // A Shortcut run while nothing plays sends an empty (or non-text) title: share anyway.
     const titleValue = (typeof title === 'string' && title.trim()) || 'Titre inconnu'
 
-    // Debug: every stored token is compared here, but none is ever logged or
-    // returned: this route is public, and a token is enough to post as its owner.
-    // Tokens from /raccourci are stored as their SHA-256; one typed into the
-    // table by hand is stored as is.
-    const hash = createHash('sha256').update(String(token)).digest('hex')
-    const { data: allTokens, error: tokenError } = await supabase
-      .from('shortcut_tokens')
-      .select('token, user_id')
-
-    const formats = (allTokens ?? []).map((row) => (/^[0-9a-f]{64}$/.test(row.token) ? 'empreinte' : 'texte'))
-    const matchedToken = allTokens?.find((row) => row.token === token || row.token === hash)
-
-    console.log('Tokens en base:', allTokens?.length ?? 0, JSON.stringify(formats))
-    console.log('Token cherché:', shortToken)
-    console.log('Match trouvé:', matchedToken ? `oui (${matchedToken.token === hash ? 'empreinte' : 'texte'})` : 'non')
-
-    if (tokenError || !matchedToken) {
-      return NextResponse.json({
-        error: 'Token invalide',
-        debug: {
-          tokenRecu: shortToken,
-          tokensEnBase: allTokens?.length ?? 0,
-          formatsEnBase: formats,
-          erreurSupabase: tokenError?.message ?? null
-        }
-      }, { status: 401 })
+    // TEMPORAIRE : mapping direct token → user_id, sans requête Supabase.
+    // Keyed by the token's SHA-256: the repository is public, and the plain
+    // token would let anyone post as this user.
+    const TOKEN_MAP: Record<string, string> = {
+      '02e92dbd34e9ee288708fb0b88f80452c725f26a01f6737decb4d96e0fe77df7': 'bfd2c43a-f905-4abc-ba26-66379e25a342'
     }
 
-    // Uses the user_id found
-    const userId = matchedToken.user_id
+    const hash = createHash('sha256').update(String(token)).digest('hex')
+    const userId = TOKEN_MAP[hash]
+    console.log('Match trouvé:', userId ? 'oui' : 'non')
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
+    }
 
     const content = artist 
       ? `J'écoute "${titleValue}" — ${artist}` 
