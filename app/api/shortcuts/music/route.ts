@@ -12,8 +12,13 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { title, artist, album, platform, token } = body
 
+    // Debug: the token is cut short so the server logs never hold a usable one.
+    console.log('SERVICE_ROLE exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+    console.log('Token reçu:', token ? `${String(token).slice(0, 8)}… (${String(token).length} caractères)` : token)
+
     if (!token) return NextResponse.json({ error: 'Token requis' }, { status: 401 })
-    if (!title) return NextResponse.json({ error: 'Titre requis' }, { status: 400 })
+    // A Shortcut run while nothing plays sends an empty (or non-text) title: share anyway.
+    const titleValue = (typeof title === 'string' && title.trim()) || 'Titre inconnu'
 
     // Tokens from /raccourci (and the downloaded Shortcut) are stored as their
     // SHA-256; one typed into the table by hand is stored as is.
@@ -33,8 +38,8 @@ export async function POST(request: Request) {
     }
 
     const content = artist 
-      ? `J'écoute "${title}" — ${artist}` 
-      : `J'écoute "${title}"`
+      ? `J'écoute "${titleValue}" — ${artist}` 
+      : `J'écoute "${titleValue}"`
 
     const post = {
       user_id: tokenData.user_id,
@@ -45,7 +50,7 @@ export async function POST(request: Request) {
     }
     let { error } = await supabase.from('posts').insert({
       ...post,
-      metadata: { title, artist, album, platform: platform || 'apple-music' }
+      metadata: { title: titleValue, artist, album, platform: platform || 'apple-music' }
     })
     // Until the posts.metadata column exists, publish without it.
     if (error && /metadata/i.test(error.message)) ({ error } = await supabase.from('posts').insert(post))
@@ -54,7 +59,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true,
-      message: `"${title}" partagé sur BoredBoard ! 🎵`
+      message: `"${titleValue}" partagé sur BoredBoard ! 🎵`
     })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
