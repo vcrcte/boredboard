@@ -1,43 +1,52 @@
-import { NextResponse } from "next/server";
-import { anonClient } from "@/lib/supabase-server";
-
-// Called by the Apple Shortcut with the personal token from /raccourci. The
-// database function checks the token and publishes the post for its owner.
-
-/** Shortcuts can't give a track link, so the post links to a search on the platform. */
-function searchLink(platform: string, query: string) {
-  return platform === "spotify"
-    ? `https://open.spotify.com/search/${encodeURIComponent(query)}`
-    : `https://music.apple.com/search?term=${encodeURIComponent(query)}`;
-}
+import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  const token = typeof body?.token === "string" ? body.token.trim() : "";
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
-  const artist = typeof body?.artist === "string" ? body.artist.trim() : "";
-  const platform = typeof body?.platform === "string" && body.platform.toLowerCase() === "spotify" ? "spotify" : "apple";
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
-  if (!token) return NextResponse.json({ error: "Token requis" }, { status: 401 });
-  if (!title) return NextResponse.json({ error: "Titre requis" }, { status: 400 });
+    const body = await request.json()
+    const { title, artist, album, platform, token } = body
 
-  const { data, error } = await anonClient().rpc("shortcut_share_music", {
-    p_token: token,
-    p_title: title,
-    p_artist: artist || null,
-    p_platform: platform,
-    p_link: searchLink(platform, artist ? `${title} ${artist}` : title),
-  });
+    if (!token) return NextResponse.json({ error: 'Token requis' }, { status: 401 })
+    if (!title) return NextResponse.json({ error: 'Titre requis' }, { status: 400 })
 
-  if (error) {
-    if (error.message.includes("invalid_token")) {
-      return NextResponse.json({ error: "Token invalide — génères-en un nouveau sur /raccourci" }, { status: 401 });
+    const { data: tokenData, error: tokenError } = await supabase
+      .from('shortcut_tokens')
+      .select('user_id')
+      .eq('token', token)
+      .single()
+
+    if (tokenError || !tokenData) {
+      return NextResponse.json({ 
+        error: `Token invalide`,
+        debug: tokenError?.message
+      }, { status: 401 })
     }
-    if (/shortcut_share_music/.test(error.message)) {
-      return NextResponse.json({ error: "Le raccourci n'est pas encore activé : exécute la migration Supabase." }, { status: 503 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const content = artist 
+      ? `J'écoute "${title}" — ${artist}` 
+      : `J'écoute "${title}"`
+
+    const { error } = await supabase.from('posts').insert({
+      user_id: tokenData.user_id,
+      type: 'musique',
+      content,
+      category: 'Musique',
+      metadata: { title, artist, album, platform: platform || 'apple-music' },
+      likes_count: 0
+    })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ 
+      success: true,
+      message: `"${title}" partagé sur BoredBoard ! 🎵`
+    })
+  } catch(e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, message: `"${title}" partagé sur BoredBoard !`, post_id: data });
 }
