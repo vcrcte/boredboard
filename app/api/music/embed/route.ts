@@ -30,11 +30,27 @@ async function spotify(url: URL): Promise<MusicEmbed | null> {
 
 // Apple Music has no public oEmbed endpoint; the iTunes lookup API returns the
 // same information from the track id (?i=) or the album id (last path segment).
+// Links shared from an iPhone look like music.apple.com/fr/album/<album-name>/<album-id>?i=<track-id>.
 async function apple(url: URL): Promise<MusicEmbed | null> {
-  const id = url.searchParams.get("i") ?? url.pathname.split("/").filter(Boolean).pop();
-  if (!id || !/^\d+$/.test(id)) return null;
-  const result = (await getJson(`https://itunes.apple.com/lookup?id=${id}`))?.results?.[0];
-  if (!result) return null;
+  const parts = url.pathname.split("/").filter(Boolean);
+  // The store in the link ("fr"): a track sold only there is missing from the default US store.
+  const country = /^[a-z]{2}$/i.test(parts[0] ?? "") ? `&country=${parts[0].toLowerCase()}` : "";
+  const id = url.searchParams.get("i") ?? parts[parts.length - 1];
+
+  let result = id && /^\d+$/.test(id) ? (await getJson(`https://itunes.apple.com/lookup?id=${id}${country}`))?.results?.[0] : null;
+
+  // No usable id: search the name written in the link. After /album/ it is the
+  // album's name, so the search then looks for the album itself.
+  if (!result) {
+    const index = parts.findIndex((part) => part === "song" || part === "album");
+    const slug = index >= 0 ? parts[index + 1] : undefined;
+    const name = slug && !/^\d+$/.test(slug) ? decodeURIComponent(slug).replace(/-/g, " ").trim() : "";
+    if (!name) return null;
+    const entity = parts[index] === "song" ? "song" : "album";
+    result = (await getJson(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&media=music&entity=${entity}&limit=1${country}`))?.results?.[0];
+    if (!result) return null;
+  }
+
   const title = result.trackName ?? result.collectionName;
   return {
     platform: "apple",

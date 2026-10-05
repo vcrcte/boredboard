@@ -48,7 +48,8 @@ export async function POST(request: Request) {
     let finalMetadata: Record<string, unknown> = { title: finalTitle, artist: finalArtist, album, platform: platform || 'apple-music' }
 
     // Shared from Spotify, Deezer, YouTube or Apple Music: only a link arrives.
-    const url = typeof body.url === 'string' && /^https:\/\//.test(body.url.trim()) ? body.url.trim() : null
+    // Some apps share text around the link ("Écoute X sur Spotify https://…"): keep the link only.
+    const url = typeof body.url === 'string' ? (/https:\/\/\S+/.exec(body.url)?.[0] ?? null) : null
 
     if (url && !title) {
       try {
