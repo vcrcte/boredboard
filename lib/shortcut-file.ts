@@ -26,8 +26,13 @@ function toPlist(value: PlistValue): string {
     .join("")}</dict>`;
 }
 
-/** The workflow: current song → POST to BoredBoard → notification with the reply. */
-export function buildShortcutPlist(endpoint: string, token: string) {
+/**
+ * The workflow: current song → POST to BoredBoard → notification with the reply.
+ * With a token, it is written into the request. Without one (the shared file
+ * anyone can download), the Shortcut asks for it once, when it is installed.
+ */
+export function buildShortcutPlist(endpoint: string, token: string | null) {
+  const tokenText = randomUUID().toUpperCase();
   const song = randomUUID().toUpperCase();
   const request = randomUUID().toUpperCase();
   const reply = randomUUID().toUpperCase();
@@ -48,6 +53,11 @@ export function buildShortcutPlist(endpoint: string, token: string) {
 
   const workflow: PlistValue = {
     WFWorkflowActions: [
+      // Holds the token; filled in at install time when the file has none.
+      {
+        WFWorkflowActionIdentifier: "is.workflow.actions.gettext",
+        WFWorkflowActionParameters: { UUID: tokenText, WFTextActionText: token ?? "" },
+      },
       { WFWorkflowActionIdentifier: "is.workflow.actions.getcurrentsong", WFWorkflowActionParameters: { UUID: song } },
       {
         WFWorkflowActionIdentifier: "is.workflow.actions.downloadurl",
@@ -61,7 +71,7 @@ export function buildShortcutPlist(endpoint: string, token: string) {
               WFDictionaryFieldValueItems: [
                 field("title", variable(songProperty("Title"))),
                 field("artist", variable(songProperty("Artist"))),
-                field("token", text(token)),
+                field("token", variable({ Type: "ActionOutput", OutputUUID: tokenText, OutputName: "Text" })),
                 field("platform", text("apple")),
               ],
             },
@@ -93,7 +103,17 @@ export function buildShortcutPlist(endpoint: string, token: string) {
     WFWorkflowMinimumClientVersion: 900,
     WFWorkflowMinimumClientVersionDescription: "iOS 14.0",
     WFWorkflowIcon: { WFWorkflowIconStartColor: 431817727, WFWorkflowIconGlyphNumber: 59511 },
-    WFWorkflowImportQuestions: [],
+    WFWorkflowImportQuestions: token
+      ? []
+      : [
+          {
+            ActionIndex: 0,
+            Category: "Parameter",
+            ParameterKey: "WFTextActionText",
+            DefaultValue: "",
+            Text: "Colle ton token BoredBoard (copié depuis la page Raccourci du site)",
+          },
+        ],
     WFWorkflowInputContentItemClasses: [],
     WFWorkflowOutputContentItemClasses: [],
     WFWorkflowTypes: [],

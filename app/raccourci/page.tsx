@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import Navbar, { Logo } from "@/components/Navbar";
@@ -14,6 +15,8 @@ const DIM = "rgba(28,26,21,0.45)";
 const GREEN = "#16A34A";
 const RED = "#C0392B";
 const TOKEN_KEY = "boredboard:shortcut-token";
+// The shared Shortcut, signed once on a Mac: it asks for the token when installed.
+const SHARED_SHORTCUT = "/BoredBoard-Music.shortcut";
 
 type Install = {
   token: string;
@@ -31,7 +34,6 @@ const css = `
 .rc-frame:nth-child(3) { animation-delay: 4s; }
 @keyframes rc-cycle { 0%, 30% { opacity: 1; } 34%, 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .rc-frame { animation: none; } .rc-frame:first-child { opacity: 1; } }
-.rc-copy:hover { background: rgba(0,0,0,0.04); }
 `;
 
 /** An illustration of the install, not a recording: three frames on a loop. */
@@ -62,24 +64,6 @@ function InstallAnimation() {
   );
 }
 
-function CopyButton({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        await navigator.clipboard.writeText(value).catch(() => undefined);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }}
-      className="rc-copy shrink-0"
-      style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 8, fontSize: 11, padding: "3px 10px", color: copied ? GREEN : TEXT }}
-    >
-      {copied ? "✓ Copié" : label}
-    </button>
-  );
-}
-
 export default function Raccourci() {
   // undefined while the session is still being read, null once known to be absent.
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -90,6 +74,22 @@ export default function Raccourci() {
   const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
   // Whether this server can sign a personalised Shortcut (only when it runs on a Mac).
   const [signing, setSigning] = useState(false);
+  // Read after mount: the server can't know the reader's device.
+  const [device, setDevice] = useState<"ios" | "desktop" | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  // Shown only when the clipboard refused the token.
+  const [visibleToken, setVisibleToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    // iPadOS reports itself as a Mac: a touch screen tells them apart.
+    const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    setDevice(ios ? "ios" : "desktop");
+    if (!ios) {
+      QRCode.toDataURL(window.location.href, { margin: 1, width: 180, color: { dark: "#1C1A15", light: "#FFFFFF" } })
+        .then(setQrCode)
+        .catch(() => setQrCode(null));
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/shortcuts/download?check=1")
@@ -106,21 +106,47 @@ export default function Raccourci() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleInstall = async () => {
+  /**
+   * Gets a fresh token, copies it, then opens the Shortcut: the shared file
+   * (it asks for the token, already in the clipboard) or, on a Mac whose
+   * server can sign, a personalised file with the token inside.
+   */
+  const handleInstall = async (target: "shared" | "personal") => {
     setError(null);
     setNotice(null);
+    setVisibleToken(null);
     // The site's session lives in the browser: without this header the routes answer 401.
     if (!session) {
       setError("Connecte-toi d'abord pour installer le Raccourci.");
       return;
     }
     setBusy(true);
+
+    const tokenRequest = fetch("/api/shortcuts/install", { headers: { Authorization: `Bearer ${session.access_token}` } }).then(
+      async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.token) throw new Error(data.error ?? `Erreur ${res.status} — assure-toi d'être connecté`);
+        return data as Install;
+      },
+    );
+
+    // Safari only lets a click write to the clipboard if the write starts right
+    // away: a ClipboardItem accepts the token while it is still being fetched.
+    let copied = true;
     try {
-      // /api/shortcuts/install returns the token (as /api/shortcuts/token does) plus the guided steps.
-      const res = await fetch("/api/shortcuts/install", { headers: { Authorization: `Bearer ${session.access_token}` } });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.token) throw new Error(data.error ?? `Erreur ${res.status} — assure-toi d'être connecté`);
-      const result = data as Install;
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ "text/plain": tokenRequest.then((result) => new Blob([result.token], { type: "text/plain" })) }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText((await tokenRequest).token);
+      }
+    } catch {
+      copied = false;
+    }
+
+    try {
+      const result = await tokenRequest;
       // Kept on this device, for the test button after a reload. Each click
       // issues a new token, which disconnects a Shortcut set up before.
       try {
@@ -128,20 +154,22 @@ export default function Raccourci() {
       } catch {
         // Not kept on this device: harmless.
       }
-      await navigator.clipboard.writeText(result.token).catch(() => undefined);
       setInstall(result);
 
-      if (signing) {
-        // The file comes with the token inside: on iPhone, iOS offers to open it in Shortcuts.
-        setNotice("Téléchargement du Raccourci…");
+      if (target === "personal") {
+        setNotice("Téléchargement de ton Raccourci personnalisé…");
         window.location.href = `/api/shortcuts/download?token=${encodeURIComponent(result.token)}`;
-      } else if (result.shortcutUrl) {
-        window.open(result.shortcutUrl, "_blank", "noopener,noreferrer");
-        setNotice("Le Raccourci s'ouvre dans un nouvel onglet : colle ton token quand il le demande (il est copié).");
       } else {
-        // This server can't sign a personalised file (only a Mac can): show the guided set-up.
-        setNotice("Ton token est prêt et copié. Suis les 3 étapes ci-dessous pour créer le Raccourci.");
-        setTimeout(() => document.getElementById("guided-setup")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+        if (!copied) setVisibleToken(result.token);
+        setNotice(
+          copied
+            ? "Ton token est copié : colle-le quand Raccourcis le demande."
+            : "Copie ton token ci-dessous : Raccourcis va te le demander.",
+        );
+        // Leaves time to read the message before Shortcuts takes over.
+        setTimeout(() => {
+          window.location.href = SHARED_SHORTCUT;
+        }, copied ? 600 : 4000);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Erreur — assure-toi d'être connecté");
@@ -185,19 +213,47 @@ export default function Raccourci() {
             <p className="mt-4" style={{ fontSize: 13 }}>
               <Link href="/login" style={{ color: INDIGO, textDecoration: "underline" }}>Connecte-toi</Link> pour installer le Raccourci.
             </p>
+          ) : device === "desktop" ? (
+            <>
+              <p className="mt-4" style={{ fontSize: 15, fontWeight: 500 }}>📲 Ouvre cette page sur ton iPhone pour installer le Raccourci</p>
+              {qrCode && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrCode} alt="QR code de cette page" width={180} height={180} className="mx-auto mt-4" style={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.07)" }} />
+              )}
+              <p className="mt-2" style={{ fontSize: 12, color: DIM }}>Scanne-le avec l&apos;appareil photo de ton iPhone.</p>
+              <button
+                type="button"
+                onClick={() => handleInstall(signing ? "personal" : "shared")}
+                disabled={busy}
+                className="mt-5 hover:bg-black/[0.04] disabled:opacity-50"
+                style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 20, padding: "9px 20px", fontSize: 13, color: TEXT }}
+              >
+                {busy ? "Préparation…" : "💻 Installer sur ce Mac"}
+              </button>
+              {signing && (
+                <p className="mt-2" style={{ fontSize: 12, color: DIM }}>Le raccourci sera configuré automatiquement avec ton compte</p>
+              )}
+            </>
           ) : (
             <button
               type="button"
-              onClick={handleInstall}
-              disabled={!session || busy}
+              onClick={() => handleInstall("shared")}
+              disabled={!session || busy || device === null}
               className="mt-5 transition hover:brightness-125 disabled:opacity-50"
               style={{ background: INDIGO, color: CREAM, borderRadius: 24, padding: "14px 28px", fontWeight: 500, fontSize: 15 }}
             >
-              {busy ? "Préparation…" : signing ? "📲 Télécharger mon Raccourci personnalisé" : "📲 Installer en 1 tap"}
+              {busy ? "Préparation…" : "📲 Installer le Raccourci"}
             </button>
           )}
-          {signing && session && (
-            <p className="mt-2" style={{ fontSize: 12, color: DIM }}>Le raccourci sera configuré automatiquement avec ton compte</p>
+          {visibleToken && (
+            <input
+              readOnly
+              value={visibleToken}
+              aria-label="Ton token"
+              onFocus={(event) => event.currentTarget.select()}
+              className="mt-3 w-full"
+              style={{ background: "#F0EBE1", border: "1px solid rgba(0,0,0,0.07)", borderRadius: 8, padding: "8px 12px", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, outline: "none" }}
+            />
           )}
           {error && <p role="alert" className="mt-3" style={{ fontSize: 12, color: RED }}>{error}</p>}
           {notice && !error && <p role="status" className="mt-3" style={{ fontSize: 12, color: GREEN }}>{notice}</p>}
@@ -205,47 +261,9 @@ export default function Raccourci() {
           <InstallAnimation />
           <p className="mt-2" style={{ fontSize: 10, color: DIM }}>Illustration</p>
           <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
-            Fonctionne avec Apple Music. Avec Spotify ou Deezer, le Raccourci te demande le titre.
+            Fonctionne avec l&apos;app Musique (Apple Music). Raccourcis ne peut pas lire ce que jouent Spotify ou Deezer.
           </p>
         </section>
-
-        {/* Until the shared Shortcut is published: build it in four guided steps. */}
-        {install && !install.shortcutUrl && !signing && (
-          <section id="guided-setup" className="mt-4" style={{ ...card, scrollMarginTop: 72 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 500 }}>Crée-le en 1 minute</h2>
-            <p className="mt-1" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
-              Le Raccourci prêt à installer arrive bientôt. En attendant, ouvre l&apos;app Raccourcis, touche « + », puis ajoute ces actions dans l&apos;ordre.
-              Ton token est déjà copié.
-            </p>
-            <ol className="mt-4 flex flex-col" style={{ gap: 10 }}>
-              {install.steps.map((step, index) => (
-                <li key={step.action} style={{ background: CREAM, borderRadius: 12, padding: 14 }}>
-                  <p className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 500 }}>
-                    <span aria-hidden style={{ fontSize: 18 }}>{step.icon}</span>
-                    {index + 1}. {step.action}
-                  </p>
-                  <p className="mt-1" style={{ fontSize: 12, color: DIM }}>{step.detail}</p>
-                  {step.fields && (
-                    <dl className="mt-3 flex flex-col" style={{ gap: 6 }}>
-                      {Object.entries(step.fields).map(([name, value]) => {
-                        const copyable = name === "URL" || name === "token";
-                        return (
-                          <div key={name} className="flex items-center gap-2" style={{ fontSize: 12 }}>
-                            <dt className="shrink-0" style={{ width: 120, color: DIM }}>{name}</dt>
-                            <dd className="min-w-0 flex-1 truncate" style={{ fontFamily: copyable ? "ui-monospace, Menlo, monospace" : undefined, fontSize: copyable ? 11 : 12 }}>
-                              {name === "token" ? "•••••••• (déjà copié)" : value}
-                            </dd>
-                            {copyable && <CopyButton value={value} label="Copier" />}
-                          </div>
-                        );
-                      })}
-                    </dl>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
 
         {/* Step 2 */}
         <section className="mt-4 text-center" style={{ ...card, opacity: install ? 1 : 0.5 }}>

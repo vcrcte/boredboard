@@ -5,11 +5,28 @@ import { serviceClient } from "@/lib/supabase-server";
 
 // Downloads the "BoredBoard Music" Shortcut with the user's token built in.
 // GET ?check=1 only says whether this server can produce it (see lib/shortcut-file.ts).
+// GET ?generic=1 builds the shared file, without a token (asked at install),
+// published as public/BoredBoard-Music.shortcut; in development only, ?api=
+// sets the address it posts to (normally the deployed site).
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const signing = await canSignShortcuts();
   if (url.searchParams.has("check")) return NextResponse.json({ signing });
+
+  if (url.searchParams.has("generic")) {
+    if (!signing) return NextResponse.json({ error: "La signature Apple n'est possible que sur un Mac." }, { status: 501 });
+    const api = process.env.NODE_ENV !== "production" ? url.searchParams.get("api") : null;
+    const base = (api || process.env.SHORTCUT_API_URL || url.origin).replace(/\/$/, "");
+    if (!/^https?:\/\//.test(base)) return NextResponse.json({ error: "Adresse invalide" }, { status: 400 });
+    const file = await signShortcut(buildShortcutPlist(`${base}/api/shortcuts/music`, null));
+    return new NextResponse(new Uint8Array(file), {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": 'attachment; filename="BoredBoard Music.shortcut"',
+      },
+    });
+  }
 
   const token = url.searchParams.get("token")?.trim();
   if (!token) return NextResponse.json({ error: "Token requis" }, { status: 401 });
