@@ -16,6 +16,15 @@ const DIM = "rgba(28,26,21,0.45)";
 const GREEN = "#16A34A";
 const RED = "#C0392B";
 const SHORTCUT_ICLOUD_URL = "https://www.icloud.com/shortcuts/95743782176c478485d046eb866a95e2";
+// Second Shortcut, from the share sheet: it sends the shared link to the same route.
+const SHORTCUT_SHARE_URL = "https://www.icloud.com/shortcuts/8c266e2d87a44949919fee8599228760";
+
+const sharePlatforms = [
+  { label: "Spotify", background: "rgba(30,215,96,0.08)", color: "#1DB954" },
+  { label: "Deezer", background: "rgba(239,100,0,0.08)", color: "#EF6400" },
+  { label: "YouTube", background: "rgba(255,0,0,0.08)", color: "#FF0000" },
+  { label: "Apple Music", background: "rgba(252,60,68,0.08)", color: "#FC3C44" },
+];
 
 const card = { background: "#FFFFFF", border: "1px solid rgba(0,0,0,0.07)", borderRadius: 16, padding: 24 };
 const desc = { fontSize: 13, color: DIM, lineHeight: 1.6 };
@@ -51,6 +60,7 @@ const css = `
 .rc-ghost:hover { background: rgba(0,0,0,0.04); }
 .rc-main:hover { filter: brightness(1.15); }
 .rc-copy:hover { filter: brightness(1.06); }
+.rc-dark:hover { filter: brightness(1.6); }
 `;
 
 function StepBadge({ children, color = GOLD }: { children: string; color?: string }) {
@@ -166,6 +176,31 @@ export default function Raccourci() {
                 📲 Installer le Raccourci
               </a>
               <p className="mt-2 text-center" style={{ fontSize: 11, color: DIM, fontStyle: "italic" }}>Ouvre ce lien sur ton iPhone</p>
+            </section>
+
+            {/* Share sheet Shortcut */}
+            <section className="mt-4" style={card}>
+              <span className="mb-3 inline-block" style={{ fontSize: 9, background: "rgba(22,163,74,0.08)", color: GREEN, padding: "3px 8px", borderRadius: 4, letterSpacing: "0.12em" }}>
+                NOUVEAU
+              </span>
+              <h2 style={{ fontSize: 16, fontWeight: 500, color: TEXT }}>Partage depuis Spotify, Deezer ou YouTube</h2>
+              <p className="mb-4 mt-2" style={desc}>Appuie sur Partager dans ton app → choisis BoredBoard Share → c&apos;est posté.</p>
+              <a
+                href={SHORTCUT_SHARE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rc-dark"
+                style={{ display: "block", background: TEXT, color: CREAM, borderRadius: 14, padding: "14px 28px", fontSize: 15, fontWeight: 500, textAlign: "center", textDecoration: "none" }}
+              >
+                📤 Installer le Raccourci Partage
+              </a>
+              <div className="mt-3 flex flex-wrap justify-center" style={{ gap: 6 }}>
+                {sharePlatforms.map((item) => (
+                  <span key={item.label} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, background: item.background, color: item.color }}>
+                    {item.label}
+                  </span>
+                ))}
+              </div>
             </section>
 
             {/* Step 2 */}

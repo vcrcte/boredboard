@@ -626,6 +626,8 @@ function PostCard({ post }: { post: Post }) {
 
 function LinkPostCard({ post }: { post: Post }) {
   const embed = usePostEmbed(post);
+  // Links shared from the Shortcut are stored as "J'écoute …": not a comment either.
+  const hasComment = Boolean(embed && post.content && post.content !== embed.title && !post.content.startsWith("J'écoute"));
   const author = post.profiles;
   const type = postTypes.find((item) => item.value === post.type);
   const category = categories.find((item) => item.label === post.category);
@@ -651,12 +653,12 @@ function LinkPostCard({ post }: { post: Post }) {
       {embed ? (
         <>
           {/* Without a comment the title is stored as content: no need to repeat it. */}
-          {post.content && post.content !== embed.title && (
+          {hasComment && (
             <p className="mb-3 mt-2 whitespace-pre-wrap break-words" style={{ fontSize: 13, color: ink(0.6), fontStyle: "italic", lineHeight: 1.6 }}>
               {post.content}
             </p>
           )}
-          <div className={post.content && post.content !== embed.title ? "" : "mt-3"}>
+          <div className={hasComment ? "" : "mt-3"}>
             <SharedMusicCard embed={embed} href={post.url} />
           </div>
         </>

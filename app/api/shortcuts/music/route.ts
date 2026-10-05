@@ -7,8 +7,6 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { title, artist, album, platform, token } = body
 
-    const titleValue = title || 'Titre inconnu'
-
     if (!token) return NextResponse.json({ error: 'Token requis' }, { status: 401 })
 
     // Mapping direct token → user_id
@@ -45,19 +43,49 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
     }
 
-    // Artwork and Apple Music link from the iTunes Search API (free, no key).
+    let finalTitle = title || ''
+    let finalArtist = artist || ''
+    let finalMetadata: Record<string, unknown> = { title: finalTitle, artist: finalArtist, album, platform: platform || 'apple-music' }
+
+    // Shared from Spotify, Deezer, YouTube or Apple Music: only a link arrives.
+    const url = typeof body.url === 'string' && /^https:\/\//.test(body.url.trim()) ? body.url.trim() : null
+
+    if (url && !title) {
+      try {
+        // This deployment's own embed route (lib/music.ts format, read by the feed's player card).
+        const embedRes = await fetch(`${new URL(request.url).origin}/api/music/embed?url=${encodeURIComponent(url)}`, {
+          signal: AbortSignal.timeout(5000)
+        })
+        if (embedRes.ok) {
+          const embedData = await embedRes.json()
+          finalTitle = embedData.title || 'Titre inconnu'
+          finalArtist = ''
+          finalMetadata = { ...embedData, url }
+        }
+      } catch (e) {
+        console.log('Erreur oEmbed:', e)
+      }
+    }
+
+    // A link was sent but not understood: say so instead of posting "Titre inconnu".
+    if (body.url && !title && !finalMetadata.embed_url) {
+      return NextResponse.json({ error: 'Lien non reconnu : partage un lien Spotify, Deezer, YouTube ou Apple Music' }, { status: 400 })
+    }
+
+    if (!finalTitle) finalTitle = 'Titre inconnu'
+
+    // Artwork and Apple Music link from the iTunes Search API (free, no key),
+    // for songs sent by name; a shared link already brings its cover.
     // A slow or failed lookup only leaves them out.
-    let artwork: string | null = null
-    let trackUrl: string | null = null
     if (title) {
       try {
         const searchRes = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(titleValue + ' ' + (artist || ''))}&media=music&country=FR&limit=1`,
+          `https://itunes.apple.com/search?term=${encodeURIComponent(finalTitle + ' ' + finalArtist)}&media=music&country=FR&limit=1`,
           { signal: AbortSignal.timeout(3000) }
         )
         const searchData = await searchRes.json()
-        artwork = searchData.results?.[0]?.artworkUrl100?.replace('100x100', '300x300') || null
-        trackUrl = searchData.results?.[0]?.trackViewUrl || null
+        finalMetadata.artwork = searchData.results?.[0]?.artworkUrl100?.replace('100x100', '300x300') || null
+        finalMetadata.trackUrl = searchData.results?.[0]?.trackViewUrl || null
       } catch {
         // No artwork: the card shows its music icon.
       }
@@ -66,9 +94,10 @@ export async function POST(request: Request) {
     const { error } = await supabase.from('posts').insert({
       user_id: userId,
       type: 'musique',
-      content: artist ? `J'écoute "${titleValue}" — ${artist}` : `J'écoute "${titleValue}"`,
+      content: finalArtist ? `J'écoute "${finalTitle}" — ${finalArtist}` : `J'écoute "${finalTitle}"`,
+      url,
       category: 'Musique',
-      metadata: { title: titleValue, artist, album, platform: platform || 'apple-music', artwork, trackUrl },
+      metadata: finalMetadata,
       likes_count: 0
     })
 
@@ -76,7 +105,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `"${titleValue}" partagé sur BoredBoard ! 🎵`
+      message: `"${finalTitle}" partagé sur BoredBoard ! 🎵`
     })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
