@@ -104,10 +104,10 @@ export async function POST(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({
-      success: true,
-      message: `"${finalTitle}" partagé sur BoredBoard ! 🎵`
-    })
+    const successMsg = finalArtist
+      ? `${finalTitle} — ${finalArtist} a été partagé avec succès ✓`
+      : `${finalTitle} a été partagé avec succès ✓`
+    return NextResponse.json({ success: true, message: successMsg })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
