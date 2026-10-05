@@ -7,27 +7,83 @@ import Navbar, { Logo } from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
+const BEIGE = "#F0EBE1";
 const INDIGO = "#2A3560";
+const GOLD = "#C4A94A";
 const TEXT = "#1C1A15";
 const GEORGIA = "Georgia, 'Times New Roman', serif";
 const DIM = "rgba(28,26,21,0.45)";
 const GREEN = "#16A34A";
 const RED = "#C0392B";
-const TOKEN_KEY = "boredboard:shortcut-token";
-// The shared Shortcut: it contains a BOREDBOARD_TOKEN placeholder that each
-// user replaces with their own token after installing it.
 const SHORTCUT_ICLOUD_URL = "https://www.icloud.com/shortcuts/95743782176c478485d046eb866a95e2";
 
-type Status = { ok: boolean; message: string } | null;
+const card = { background: "#FFFFFF", border: "1px solid rgba(0,0,0,0.07)", borderRadius: 16, padding: 24 };
+const desc = { fontSize: 13, color: DIM, lineHeight: 1.6 };
+
+const steps = [
+  "Ouvre l'app Raccourcis sur ton iPhone",
+  "Appuie longuement sur BoredBoard Music → Modifier",
+  "Dans le champ token, supprime le texte existant",
+  "Colle ton token personnel",
+  "C'est terminé !",
+];
+
+const faq = [
+  {
+    question: "Ça marche avec Spotify ?",
+    answer:
+      "Pas encore — on y travaille. Pour l'instant, le raccourci fonctionne avec Apple Music. Tu peux aussi partager un lien Spotify depuis le dashboard.",
+  },
+  {
+    question: "C'est quoi le token ?",
+    answer:
+      "Un identifiant unique lié à ton compte BoredBoard. Il permet au raccourci de publier dans ton feed. Ne le partage avec personne.",
+  },
+  {
+    question: "Ça marche sur Mac ?",
+    answer:
+      "Le raccourci fonctionne uniquement sur iPhone pour l'instant. Sur Mac, tu peux partager ta musique en collant un lien depuis le dashboard.",
+  },
+];
+
+// Hover rules: no quotes inside, React would escape them and break hydration.
+const css = `
+.rc-ghost:hover { background: rgba(0,0,0,0.04); }
+.rc-main:hover { filter: brightness(1.15); }
+.rc-copy:hover { filter: brightness(1.06); }
+`;
+
+function StepBadge({ children, color = GOLD }: { children: string; color?: string }) {
+  return (
+    <p className="mb-3" style={{ fontSize: 9, color, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+      {children}
+    </p>
+  );
+}
+
+function FaqItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", padding: "12px 0" }}>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center text-left" style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>
+        {question}
+        <span aria-hidden className="ml-auto" style={{ color: DIM, transition: "transform 0.15s", transform: open ? "rotate(90deg)" : "none" }}>
+          ▸
+        </span>
+      </button>
+      {open && <p className="mt-2" style={{ fontSize: 12, color: "rgba(28,26,21,0.5)", lineHeight: 1.6 }}>{answer}</p>}
+    </div>
+  );
+}
 
 export default function Raccourci() {
   // undefined while the session is still being read, null once known to be absent.
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [token, setToken] = useState("");
-  const [tokenStatus, setTokenStatus] = useState<Status>(null);
-  const [generating, setGenerating] = useState(false);
+  const [tokenVisible, setTokenVisible] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [test, setTest] = useState<Status>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -38,158 +94,160 @@ export default function Raccourci() {
   }, []);
 
   const showToken = async () => {
-    setTokenStatus(null);
-    setCopied(false);
-    // The site's session lives in the browser: without this header the route answers 401.
-    if (!session) {
-      setTokenStatus({ ok: false, message: "Connecte-toi d'abord pour obtenir ton token." });
-      return;
-    }
-    setGenerating(true);
+    if (!session) return;
+    setError(null);
+    setLoading(true);
     try {
+      // The site's session lives in the browser: without this header the route answers 401.
       const res = await fetch("/api/shortcuts/token", { headers: { Authorization: `Bearer ${session.access_token}` } });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.token) throw new Error(data.error ?? `Erreur ${res.status}`);
       setToken(data.token);
-      try {
-        localStorage.setItem(TOKEN_KEY, data.token);
-      } catch {
-        // Not kept on this device: harmless.
-      }
+      setTokenVisible(true);
     } catch (caught) {
-      setTokenStatus({ ok: false, message: caught instanceof Error ? caught.message : "Impossible d'obtenir le token." });
+      setError(caught instanceof Error ? caught.message : "Impossible d'obtenir ton token.");
     }
-    setGenerating(false);
+    setLoading(false);
   };
 
   const copy = async () => {
+    if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
       setCopied(true);
     } catch {
-      setTokenStatus({ ok: false, message: "Copie impossible : sélectionne le token et copie-le à la main." });
+      setError("Copie impossible : sélectionne le token et copie-le à la main.");
     }
   };
 
-  const runTest = async () => {
-    setTest(null);
-    const res = await fetch("/api/shortcuts/music", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, title: "Test du Raccourci BoredBoard", artist: "BoredBoard", platform: "apple" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setTest(res.ok ? { ok: true, message: "✓ Ça marche : un post test est dans ton feed." } : { ok: false, message: data.error ?? "La connexion a échoué." });
-  };
-
-  const card = { background: "#FFFFFF", border: "1px solid rgba(0,0,0,0.07)", borderRadius: 14, padding: 24 };
-
   return (
     <div className="min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
+      <style>{css}</style>
       <Navbar />
-      <main className="mx-auto" style={{ maxWidth: 560, padding: "48px 20px" }}>
-        <Logo className="text-[24px]" />
-        <h1 className="mt-4" style={{ fontFamily: GEORGIA, fontSize: 28, fontWeight: 400, color: TEXT, lineHeight: 1.2 }}>
-          Partage ta musique en un clic
-        </h1>
+      <main className="mx-auto" style={{ maxWidth: 520, padding: "48px 20px" }}>
+        <div className="mb-2">
+          <Logo className="text-[20px]" />
+        </div>
+        <h1 style={{ fontFamily: GEORGIA, fontSize: 28, fontWeight: 400, color: TEXT, lineHeight: 1.2 }}>Partage ta musique en 1 tap</h1>
         <p className="mt-2" style={{ fontSize: 14, color: DIM, lineHeight: 1.6 }}>
-          Installe le Raccourci Apple pour partager ce que tu écoutes directement depuis ton iPhone ou Mac.
+          Écoute un titre sur Apple Music → active le Raccourci → il apparaît dans ton feed BoredBoard.
         </p>
+        <div className="mt-3 flex flex-wrap" style={{ gap: 8 }}>
+          <span style={{ background: "rgba(252,60,68,0.08)", color: "#FC3C44", fontSize: 11, padding: "4px 10px", borderRadius: 8 }}>Apple Music</span>
+          <span style={{ background: "rgba(0,0,0,0.04)", color: "rgba(28,26,21,0.3)", fontSize: 11, padding: "4px 10px", borderRadius: 8 }}>Bientôt Spotify</span>
+        </div>
 
-        <section className="mt-8 text-center" style={card}>
-          <a
-            href={SHORTCUT_ICLOUD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition hover:brightness-125"
-            style={{
-              display: "inline-block",
-              background: INDIGO,
-              color: CREAM,
-              borderRadius: 20,
-              padding: "12px 28px",
-              fontSize: 14,
-              fontWeight: 500,
-              textDecoration: "none",
-              textAlign: "center",
-            }}
-          >
-            📲 Installer le Raccourci BoredBoard
-          </a>
-          <p className="mt-2" style={{ fontSize: 11, color: DIM }}>Compatible iPhone et iPad · Apple Music</p>
-
-          <div className="my-6" style={{ height: 1, background: "rgba(0,0,0,0.07)" }} />
-
-          <div className="text-left">
-            <h2 style={{ fontSize: 15, fontWeight: 500 }}>Ton token personnel</h2>
-            <p className="mt-1" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
-              Il identifie ton compte BoredBoard : ne le partage avec personne. En afficher un nouveau désactive le précédent.
-            </p>
-
-            {session === null ? (
-              <p className="mt-3" style={{ fontSize: 13 }}>
-                <Link href="/login" style={{ color: INDIGO, textDecoration: "underline" }}>Connecte-toi</Link> pour obtenir ton token.
-              </p>
-            ) : token ? (
-              <>
-                <input
-                  readOnly
-                  value={token}
-                  aria-label="Ton token personnel"
-                  onFocus={(event) => event.currentTarget.select()}
-                  className="mt-3 w-full"
-                  style={{ background: "#F0EBE1", border: "1px solid rgba(0,0,0,0.07)", borderRadius: 8, padding: "8px 12px", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, color: TEXT, outline: "none" }}
-                />
-                <div className="mt-2 flex items-center gap-3">
-                  <button type="button" onClick={copy} className="hover:bg-black/[0.04]" style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 8, fontSize: 12, padding: "5px 14px" }}>
-                    Copier
-                  </button>
-                  {copied && <span style={{ fontSize: 11, color: GREEN }}>✓ Copié !</span>}
-                </div>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={showToken}
-                disabled={!session || generating}
-                className="mt-3 hover:bg-black/[0.04] disabled:opacity-50"
-                style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 8, fontSize: 13, padding: "7px 16px", color: TEXT }}
+        {session === null ? (
+          <section className="mt-8 text-center" style={card}>
+            <p style={{ fontSize: 16, fontWeight: 500 }}>Connecte-toi d&apos;abord</p>
+            <p className="mt-2" style={desc}>Le Raccourci publie dans ton feed : il a besoin de ton compte BoredBoard.</p>
+            <Link
+              href="/login"
+              className="rc-main mt-4 inline-block"
+              style={{ background: INDIGO, color: CREAM, borderRadius: 14, padding: "12px 28px", fontSize: 14, fontWeight: 500, textDecoration: "none" }}
+            >
+              Se connecter
+            </Link>
+          </section>
+        ) : (
+          <>
+            {/* Step 1 */}
+            <section className="mt-8" style={card}>
+              <StepBadge>Étape 1</StepBadge>
+              <h2 style={{ fontSize: 16, fontWeight: 500, color: TEXT }}>Installe le Raccourci</h2>
+              <p className="mb-4 mt-2" style={desc}>Clique le bouton ci-dessous depuis ton iPhone. Le raccourci s&apos;installe automatiquement.</p>
+              <a
+                href={SHORTCUT_ICLOUD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rc-main"
+                style={{ display: "block", background: INDIGO, color: CREAM, borderRadius: 14, padding: "14px 28px", fontSize: 15, fontWeight: 500, textAlign: "center", textDecoration: "none" }}
               >
-                {generating ? "Génération…" : "Afficher mon token"}
-              </button>
-            )}
-            {tokenStatus && (
-              <p role="alert" className="mt-2" style={{ fontSize: 12, color: tokenStatus.ok ? GREEN : RED }}>{tokenStatus.message}</p>
-            )}
+                📲 Installer le Raccourci
+              </a>
+              <p className="mt-2 text-center" style={{ fontSize: 11, color: DIM, fontStyle: "italic" }}>Ouvre ce lien sur ton iPhone</p>
+            </section>
 
-            <p className="mt-4" style={{ fontSize: 13, color: TEXT, lineHeight: 1.6 }}>
-              Après l&apos;installation, ouvre le Raccourci et remplace <code style={{ fontSize: 12 }}>BOREDBOARD_TOKEN</code> par ton token ci-dessus.
-            </p>
-          </div>
+            {/* Step 2 */}
+            <section className="mt-4" style={card}>
+              <StepBadge>Étape 2</StepBadge>
+              <h2 style={{ fontSize: 16, fontWeight: 500, color: TEXT }}>Configure ton token</h2>
+              <p className="mb-4 mt-2" style={desc}>Copie ton token personnel et colle-le dans le raccourci à la place du texte existant.</p>
+
+              <div style={{ background: CREAM, borderRadius: 12, padding: 16 }}>
+                {!tokenVisible ? (
+                  <button
+                    type="button"
+                    onClick={showToken}
+                    disabled={!session || loading}
+                    className="rc-ghost w-full disabled:opacity-50"
+                    style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 10, padding: "10px 13px", fontSize: 13, color: TEXT }}
+                  >
+                    {loading ? "Génération…" : "Afficher mon token"}
+                  </button>
+                ) : (
+                  <>
+                    <div className="flex" style={{ gap: 8 }}>
+                      <input
+                        readOnly
+                        value={token ?? ""}
+                        aria-label="Ton token personnel"
+                        onFocus={(event) => event.currentTarget.select()}
+                        className="min-w-0 flex-1"
+                        style={{ background: "#FFFFFF", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, padding: "10px 14px", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 13, color: TEXT, outline: "none" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={copy}
+                        className="rc-copy shrink-0"
+                        style={{ background: GOLD, color: TEXT, borderRadius: 10, padding: "10px 16px", fontWeight: 500, fontSize: 13 }}
+                      >
+                        Copier
+                      </button>
+                    </div>
+                    {copied && <p className="mt-2" style={{ fontSize: 11, color: GREEN }}>✓ Copié !</p>}
+                  </>
+                )}
+                {error && <p role="alert" className="mt-2" style={{ fontSize: 11, color: RED }}>{error}</p>}
+              </div>
+
+              <ol className="mt-4" style={{ fontSize: 12, color: "rgba(28,26,21,0.5)", lineHeight: 1.7 }}>
+                {steps.map((step, index) => (
+                  <li key={step}>
+                    {index + 1}. {step}
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            {/* Step 3 */}
+            <section className="mt-4" style={{ background: BEIGE, border: "1px solid rgba(196,169,74,0.15)", borderRadius: 16, padding: 24 }}>
+              <StepBadge color={GREEN}>C&apos;est tout !</StepBadge>
+              <h2 style={{ fontFamily: GEORGIA, fontSize: 18, fontWeight: 400, color: TEXT }}>Tu es prêt.</h2>
+              <p className="mt-2" style={{ fontSize: 13, color: "rgba(28,26,21,0.5)", lineHeight: 1.6 }}>
+                La prochaine fois que tu écoutes un titre sur Apple Music, ouvre le Raccourci et il sera partagé automatiquement dans ton feed BoredBoard.
+              </p>
+              <div className="mt-3 flex items-center justify-center" style={{ gap: 4 }} aria-hidden>
+                <span style={{ background: "rgba(252,60,68,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>🎵</span>
+                <span style={{ fontSize: 12, color: DIM }}>→</span>
+                <span style={{ background: "rgba(42,53,96,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>⚡</span>
+                <span style={{ fontSize: 12, color: DIM }}>→</span>
+                <span style={{ background: "rgba(196,169,74,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>📱</span>
+              </div>
+              <p className="mt-2 text-center" style={{ fontSize: 10, color: DIM }}>Apple Music → Raccourci → BoredBoard</p>
+            </section>
+          </>
+        )}
+
+        {/* FAQ */}
+        <section className="mb-8 mt-8">
+          <h2 className="mb-4" style={{ fontSize: 11, color: DIM, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 400 }}>
+            Questions fréquentes
+          </h2>
+          {faq.map((item) => (
+            <FaqItem key={item.question} {...item} />
+          ))}
         </section>
-
-        <section className="mt-4 text-center" style={{ ...card, opacity: token ? 1 : 0.5 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 500 }}>C&apos;est tout !</h2>
-          <p className="mt-2" style={{ fontSize: 13, color: DIM, lineHeight: 1.6 }}>
-            La prochaine fois que tu écoutes un titre, ouvre le Raccourci et il sera partagé automatiquement sur BoredBoard.
-          </p>
-          {token && (
-            <>
-              <button type="button" onClick={runTest} className="mt-3 hover:underline" style={{ fontSize: 12, color: INDIGO }}>
-                Tester mon token
-              </button>
-              {test && (
-                <p role={test.ok ? "status" : "alert"} className="mt-2" style={{ fontSize: 12, color: test.ok ? GREEN : RED }}>
-                  {test.message}
-                </p>
-              )}
-            </>
-          )}
-        </section>
-
-        <p className="mt-6 text-center" style={{ fontSize: 12, color: DIM }}>
-          Si tu n&apos;as pas encore de compte BoredBoard, <Link href="/signup" style={{ color: INDIGO }}>crée-en un gratuitement</Link> puis reviens ici.
-        </p>
       </main>
     </div>
   );

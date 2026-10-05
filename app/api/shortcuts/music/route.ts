@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -15,8 +16,30 @@ export async function POST(request: Request) {
       'boredboard-victor-2026': 'bfd2c43a-f905-4abc-ba26-66379e25a342'
     }
 
-    const userId = TOKEN_MAP[token]
-    console.log('Token reçu:', token, 'userId:', userId)
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
+
+    // Tokens from the /raccourci page are stored as their SHA-256 in shortcut_tokens.
+    let userId: string | undefined = TOKEN_MAP[token]
+    if (!userId) {
+      const hash = createHash('sha256').update(String(token)).digest('hex')
+      const { data } = await supabase
+        .from('shortcut_tokens')
+        .select('user_id')
+        .eq('token', hash)
+        .maybeSingle()
+      userId = data?.user_id
+    }
+    // Only the start of the token: Vercel keeps its logs, a full token is enough to post.
+    console.log('Token reçu:', `${String(token).slice(0, 8)}…`, 'userId:', userId)
 
     if (!userId) {
       return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
@@ -39,17 +62,6 @@ export async function POST(request: Request) {
         // No artwork: the card shows its music icon.
       }
     }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
 
     const { error } = await supabase.from('posts').insert({
       user_id: userId,
