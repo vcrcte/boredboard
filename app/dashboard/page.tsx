@@ -1272,7 +1272,7 @@ export default function Dashboard() {
       <style>{css}</style>
       <Navbar />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[220px_1fr_260px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[260px_1fr_300px]">
         {sidebarOpen && (
           <div aria-hidden className="fixed inset-0 z-40 md:hidden" style={{ background: "rgba(28,26,21,0.35)" }} onClick={() => setSidebarOpen(false)} />
         )}
@@ -1416,7 +1416,7 @@ export default function Dashboard() {
 
         {/* Feed */}
         <div className="relative min-h-0 min-w-0">
-          <main className="mx-auto flex h-full w-full flex-col overflow-y-auto px-3 md:px-5" style={{ background: CREAM, paddingBottom: 96, gap: 12, maxWidth: 580 }}>
+          <main className="mx-auto flex h-full w-full flex-col overflow-y-auto px-3 md:px-5" style={{ background: CREAM, paddingBottom: 96, gap: 12, maxWidth: 680 }}>
             <div className="sticky top-0 z-10 mb-2 shrink-0" style={{ background: CREAM, paddingTop: 20, paddingBottom: 12, borderBottom: `1px solid ${black(0.06)}` }}>
               <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 6 }}>
                 <button
