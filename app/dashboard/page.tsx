@@ -136,13 +136,13 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "🏠", label: "Mon espace", filter: "Tout" },
   { icon: "🧭", label: "Explorer", href: "/explore" },
   { icon: "🎵", label: "Musique", filter: "Musique" },
-  { icon: "📖", label: "Livres", filter: "Livres" },
+  { icon: "📖", label: "Livres", href: "/livres" },
   { icon: "✉️", label: "Newsletter" },
 ];
 
 const spaces: { icon: string; title: string; detail: string; filter?: string; href?: string }[] = [
   { icon: "🎵", title: "Musique", detail: "4 titres", filter: "Musique" },
-  { icon: "📖", title: "Livres", detail: "3 en cours", filter: "Livres" },
+  { icon: "📖", title: "Livres", detail: "en cours", href: "/livres" },
   { icon: "🎙", title: "Podcasts", detail: "2 favoris", filter: "Podcasts" },
 ];
 
@@ -1260,6 +1260,14 @@ export default function Dashboard() {
                 {shortcut.label}
               </button>
             ))}
+            <Link
+              href="/livres"
+              className="db-hover flex items-center"
+              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+            >
+              <span aria-hidden style={{ fontSize: 14 }}>📖</span>
+              Mes livres
+            </Link>
             <Link
               href="/explore"
               className="db-hover flex items-center"

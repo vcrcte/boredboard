@@ -4,6 +4,7 @@ import { useContext, useEffect, useState, type CSSProperties, type ReactNode } f
 import Link from "next/link";
 import { getInitials } from "@/components/Navbar";
 import { SocialContext } from "@/components/dashboard/SocialActions";
+import { getNetworkBooks, progressPercent, statusLabel, type BookWithProfile } from "@/lib/books";
 import { fetchRecentTracks, playedAgo, type LastfmTrack } from "@/lib/lastfm";
 import { changeColor, formatPercent, formatPrice, type Quote } from "@/lib/markets";
 import { avatarTones } from "@/lib/sample-data";
@@ -181,13 +182,152 @@ export function NowListeningCard() {
   );
 }
 
+type Reader = {
+  id: string;
+  initials: string;
+  firstName: string;
+  background: string;
+  color: string;
+  book: BookWithProfile;
+};
+
+/**
+ * Books currently being read by people the viewer follows.
+ * null while loading; empty when nobody is reading anything.
+ */
+function useNetworkReaders(): Reader[] | null {
+  const { user } = useContext(SocialContext);
+  const [readers, setReaders] = useState<Reader[] | null>(null);
+  const userId = user?.id;
+
+  useEffect(() => {
+    if (!userId) {
+      setReaders([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data: follows } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", userId);
+      const ids = (follows ?? []).map((row) => row.following_id as string);
+      if (!ids.length) {
+        if (!cancelled) setReaders([]);
+        return;
+      }
+      const books = await getNetworkBooks(ids, "en_cours");
+      if (cancelled) return;
+      // Deduplicate by user: keep only the most recent book per person.
+      const seen = new Set<string>();
+      const unique: Reader[] = [];
+      for (const book of books) {
+        if (seen.has(book.user_id)) continue;
+        seen.add(book.user_id);
+        const profile = book.profiles;
+        const name = profile?.name ?? profile?.username ?? "";
+        const tone = avatarTones[(book.user_id.charCodeAt(0) + book.user_id.charCodeAt(1)) % avatarTones.length];
+        unique.push({
+          id: book.user_id,
+          initials: getInitials(profile?.name ?? null, profile?.username),
+          firstName: name.split(/\s+/)[0],
+          ...tone,
+          book,
+        });
+      }
+      setReaders(unique);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  return readers;
+}
+
 export function ReadingNowCard() {
+  const readers = useNetworkReaders();
+
+  // Nobody is reading or no follows yet.
+  if (readers !== null && readers.length === 0) {
+    return (
+      <article className="db-card" style={card}>
+        <div className="flex items-center justify-between">
+          <Header>📖 Ce que lit ton réseau</Header>
+          <Link href="/livres" className="sc-link" style={{ fontSize: 11 }}>
+            Mes livres →
+          </Link>
+        </div>
+        <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
+          Quand tes abonnés partageront des livres, tu les retrouveras ici.
+        </p>
+      </article>
+    );
+  }
+
   return (
     <article className="db-card" style={card}>
-      <Header>📖 Ce que lit ton réseau</Header>
-      <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
-        Quand tes abonnés partageront des livres, tu les retrouveras ici.
-      </p>
+      <div className="flex items-center justify-between">
+        <Header>📖 Ce que lit ton réseau</Header>
+        <Link href="/livres" className="sc-link" style={{ fontSize: 11 }}>
+          Mes livres →
+        </Link>
+      </div>
+      {readers === null ? (
+        <div aria-hidden className="mt-3 flex animate-pulse flex-col" style={{ gap: 8 }}>
+          {[0, 1].map((i) => (
+            <div key={i} className="flex items-center" style={{ gap: 10 }}>
+              <span style={{ width: 36, height: 50, borderRadius: 6, background: black(0.06) }} />
+              <span className="flex-1" style={{ height: 10, background: black(0.06), borderRadius: 6 }} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ul className="mt-3 flex flex-col" style={{ gap: 10 }}>
+          {readers.slice(0, 4).map((reader) => {
+            const percent = progressPercent(reader.book);
+            const spineColors = ["#EEEDFE", "#E1F5EE", "#FAEEDA", "#FDE8E8", "#E8F4FD"];
+            const spineBg = spineColors[reader.book.title.charCodeAt(0) % spineColors.length];
+            return (
+              <li key={reader.id} className="flex items-start" style={{ gap: 10 }}>
+                {/* Book spine */}
+                <span
+                  className="flex shrink-0 items-center justify-center overflow-hidden"
+                  style={{ width: 36, height: 50, borderRadius: 6, background: spineBg }}
+                >
+                  {reader.book.cover_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={reader.book.cover_url} alt="" loading="lazy" style={{ width: 36, height: 50, objectFit: "cover", borderRadius: 6 }} />
+                  ) : (
+                    <span aria-hidden style={{ fontSize: 14 }}>📖</span>
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{reader.book.title}</span>
+                  {reader.book.author && (
+                    <span className="block truncate" style={{ fontSize: 10, color: DIM }}>{reader.book.author}</span>
+                  )}
+                  {percent !== null && (
+                    <span className="mt-1 block overflow-hidden" style={{ height: 3, background: black(0.06), borderRadius: 2, width: "100%" }}>
+                      <span style={{ display: "block", height: "100%", width: `${percent}%`, background: "#C4A94A", borderRadius: 2 }} />
+                    </span>
+                  )}
+                  <Link
+                    href={`/profile?id=${reader.id}`}
+                    className="mt-1 flex items-center hover:underline"
+                    style={{ gap: 4 }}
+                  >
+                    <Circle initials={reader.initials} background={reader.background} color={reader.color} size={16} />
+                    <span style={{ fontSize: 10, color: ink(0.5) }}>
+                      {reader.firstName} lit · {percent !== null ? `${percent}%` : statusLabel(reader.book.status)}
+                    </span>
+                  </Link>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </article>
   );
 }
