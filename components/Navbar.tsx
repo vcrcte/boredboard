@@ -47,6 +47,8 @@ export default function Navbar() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [name, setName] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Phones: the navigation links move into a full-screen menu.
+  const [mobileOpen, setMobileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -98,8 +100,26 @@ export default function Navbar() {
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    // The page behind the menu stays still.
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = overflow;
+    };
+  }, [mobileOpen]);
+
+  const navLinks = session === undefined ? [] : session ? memberLinks : visitorLinks;
+
   const handleSignOut = async () => {
     setMenuOpen(false);
+    setMobileOpen(false);
     await supabase.auth.signOut();
     router.push("/");
   };
@@ -112,7 +132,7 @@ export default function Navbar() {
         </Link>
         <ul className="hidden items-center gap-8 md:flex">
           {/* Nothing until the session is known, so visitors and members never see the other set flash. */}
-          {(session === undefined ? [] : session ? memberLinks : visitorLinks).map((link) => (
+          {navLinks.map((link) => (
             <li key={link.label}>
               <Link
                 href={link.href}
@@ -128,6 +148,18 @@ export default function Navbar() {
           ))}
         </ul>
         <div className="col-start-3 flex items-center justify-end gap-2">
+          {session !== undefined && (
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Ouvrir le menu"
+              aria-expanded={mobileOpen}
+              aria-controls="bb-mobile-menu"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-[18px] text-[#2A3560] transition-colors hover:bg-[#F5F4F0] md:hidden"
+            >
+              ☰
+            </button>
+          )}
           {session === null && (
             <>
               <Link href="/login" className="hidden rounded-md border border-[#E8E8E8] px-3.5 py-1.5 text-[13px] text-[#2A3560] transition-colors hover:border-[#2A3560] sm:block">
@@ -181,6 +213,55 @@ export default function Navbar() {
           )}
         </div>
       </nav>
+
+      {mobileOpen && (
+        <div id="bb-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu" className="fixed inset-0 z-[60] flex flex-col bg-[#F7F4EE] md:hidden">
+          <div className="flex h-[52px] items-center justify-between border-b border-[#E8E8E8] bg-white px-6">
+            <Link href="/" onClick={() => setMobileOpen(false)}>
+              <Logo />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Fermer le menu"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-[18px] text-[#2A3560] transition-colors hover:bg-[#F0EBE1]"
+            >
+              ✕
+            </button>
+          </div>
+          <ul className="flex flex-col px-6 py-6">
+            {[...navLinks, ...(session ? menuLinks : [])].map((link) => (
+              <li key={link.label}>
+                <Link
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`block border-b border-black/[0.06] py-4 font-serif text-[22px] ${
+                    "highlight" in link && link.highlight ? "text-[#2A3560]" : "text-[#1C1A15]"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-auto flex flex-col gap-3 px-6 pb-10">
+            {session ? (
+              <button type="button" onClick={handleSignOut} className="rounded-xl border border-black/[0.1] py-3 text-[14px] text-[#888780]">
+                Se déconnecter
+              </button>
+            ) : (
+              <>
+                <Link href="/login" onClick={() => setMobileOpen(false)} className="rounded-xl border border-black/[0.1] py-3 text-center text-[14px] text-[#2A3560]">
+                  Connexion
+                </Link>
+                <Link href="/signup" onClick={() => setMobileOpen(false)} className="rounded-xl bg-[#2A3560] py-3 text-center text-[14px] text-white">
+                  Rejoindre
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }

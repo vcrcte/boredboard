@@ -548,7 +548,7 @@ function ShortcutTrackCard({ post, track }: { post: Post; track: ShortcutTrack }
       <span className="flex shrink-0 items-center justify-center overflow-hidden" style={{ width: 56, height: 56, borderRadius: 10, background: "rgba(131,77,255,0.1)" }}>
         {track.artwork && !artworkFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={track.artwork} alt="" width={56} height={56} onError={() => setArtworkFailed(true)} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10 }} />
+          <img loading="lazy" src={track.artwork} alt="" width={56} height={56} onError={() => setArtworkFailed(true)} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10 }} />
         ) : (
           <span aria-hidden style={{ fontSize: 24, color: platform?.color ?? "#534AB7" }}>🎵</span>
         )}
@@ -967,6 +967,17 @@ export default function Dashboard() {
   const [mine, setMine] = useState<Record<string, MyInteractions>>({});
   const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  // Phones: the left sidebar opens as a drawer from the hamburger button.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidebarOpen]);
 
   // The local copy shows instantly; the one saved on the profile wins once read.
   useEffect(() => {
@@ -1000,6 +1011,9 @@ export default function Dashboard() {
     const { data, error } = await supabase
       .from("posts")
       .select(POST_SELECT)
+      // Leftovers from testing the Apple Shortcut, filtered in the query so the 20 posts are real ones.
+      .not("content", "ilike", "%Morceau actuel%")
+      .not("content", "ilike", "%Test du Raccourci%")
       .order("created_at", { ascending: false })
       .limit(20);
 
@@ -1154,8 +1168,22 @@ export default function Dashboard() {
       <Navbar />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[220px_1fr_260px]">
-        {/* Left sidebar */}
-        <aside className="hidden overflow-y-auto md:block" style={{ background: WHITE, borderRight: `1px solid ${black(0.07)}`, padding: "20px 16px" }}>
+        {sidebarOpen && (
+          <div aria-hidden className="fixed inset-0 z-40 md:hidden" style={{ background: "rgba(28,26,21,0.35)" }} onClick={() => setSidebarOpen(false)} />
+        )}
+        {/* Left sidebar: a drawer on phones */}
+        <aside
+          id="db-sidebar"
+          className={`${sidebarOpen ? "fixed inset-y-0 left-0 z-50 block w-[280px] max-w-[85vw] shadow-xl" : "hidden"} overflow-y-auto md:static md:z-auto md:block md:w-auto md:max-w-none md:shadow-none`}
+          style={{ background: WHITE, borderRight: `1px solid ${black(0.07)}`, padding: "20px 16px" }}
+          // Following a link or picking a filter closes the drawer.
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest("a, button")) setSidebarOpen(false);
+          }}
+        >
+          <button type="button" aria-label="Fermer le menu" className="db-hover mb-3 ml-auto flex md:hidden" style={{ borderRadius: 8, padding: "2px 8px", fontSize: 18, color: ink(0.5) }}>
+            ✕
+          </button>
           <div className="flex items-center gap-2.5">
             <Avatar initials={initials} size={40} background={INDIGO} color={CREAM} />
             <div className="min-w-0">
@@ -1284,9 +1312,20 @@ export default function Dashboard() {
 
         {/* Feed */}
         <div className="relative min-h-0 min-w-0">
-          <main className="flex h-full flex-col overflow-y-auto" style={{ background: CREAM, padding: "0 20px 96px", gap: 12 }}>
+          <main className="flex h-full flex-col overflow-y-auto px-3 md:px-5" style={{ background: CREAM, paddingBottom: 96, gap: 12 }}>
             <div className="sticky top-0 z-10 mb-2 shrink-0" style={{ background: CREAM, paddingTop: 20, paddingBottom: 12, borderBottom: `1px solid ${black(0.06)}` }}>
               <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  aria-label="Ouvrir le menu"
+                  aria-expanded={sidebarOpen}
+                  aria-controls="db-sidebar"
+                  className="db-hover flex shrink-0 items-center md:hidden"
+                  style={{ border: `1px solid ${black(0.1)}`, borderRadius: 20, padding: "3px 12px", fontSize: 16, color: ink(0.6) }}
+                >
+                  ☰
+                </button>
                 {filters.map((item) => (
                   <button
                     key={item}

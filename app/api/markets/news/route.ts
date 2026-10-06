@@ -1,38 +1,48 @@
 import { NextResponse } from "next/server";
 
-// NewsAPI treats space-separated words as AND, which returns nothing for a
-// list of finance keywords, so the terms are combined with OR and matched
-// against titles and descriptions only.
-const QUERY =
-  '"marchés financiers" OR "Wall Street" OR "CAC 40" OR "Bourse de Paris" OR "banque centrale" OR "Réserve fédérale" OR BCE';
+// Built as a static route: rebuilt every 15 minutes, even when an early return skips the cached fetch.
+export const revalidate = 900;
+
+// Failures answer 200 with no articles: the page shows its "retry" message,
+// and a missing key or a GNews outage no longer shows up as a server error.
+function unavailable(message: string) {
+  return NextResponse.json({ status: "error", message, articles: [] });
+}
+
+type GNewsArticle = {
+  title: string | null;
+  description: string | null;
+  url: string | null;
+  image: string | null;
+  publishedAt: string;
+  source?: { name?: string };
+};
 
 export async function GET() {
-  if (!process.env.NEWSAPI_KEY) {
-    return NextResponse.json({ status: "error", message: "NEWSAPI_KEY manquante" }, { status: 500 });
-  }
+  const apiKey = process.env.GNEWS_API_KEY;
+  if (!apiKey) return unavailable("GNEWS_API_KEY manquante");
 
   try {
-    const params = new URLSearchParams({
-      q: QUERY,
-      searchIn: "title,description",
-      language: "fr",
-      sortBy: "publishedAt",
-      pageSize: "20",
-      apiKey: process.env.NEWSAPI_KEY,
+    const res = await fetch(`https://gnews.io/api/v4/search?q=bourse+marchés+financiers&lang=fr&max=10&apikey=${apiKey}`, {
+      next: { revalidate: 900 }, // cache 15 minutes
     });
-    const res = await fetch(`https://newsapi.org/v2/everything?${params}`, { next: { revalidate: 300 } });
     const data = await res.json();
+    if (!res.ok) return unavailable(data.errors?.[0] ?? "Erreur GNews");
 
-    if (!res.ok || data.status !== "ok") {
-      return NextResponse.json({ status: "error", message: data.message ?? "Erreur NewsAPI" }, { status: 502 });
-    }
-
-    const articles = (data.articles ?? []).filter(
-      (article: { title: string | null; url: string | null }) =>
-        article.url && article.title && article.title !== "[Removed]",
-    );
+    // Same shape as the news route (NewsAPI format, read by the markets dashboard).
+    const articles = ((data.articles ?? []) as GNewsArticle[])
+      .filter((article) => article.url && article.title)
+      .map((article) => ({
+        title: article.title,
+        description: article.description,
+        url: article.url,
+        urlToImage: article.image,
+        publishedAt: article.publishedAt,
+        source: { name: article.source?.name || "Source inconnue" },
+        author: article.source?.name ?? null,
+      }));
     return NextResponse.json({ status: "ok", articles });
   } catch {
-    return NextResponse.json({ status: "error", message: "NewsAPI injoignable" }, { status: 502 });
+    return unavailable("GNews injoignable");
   }
 }

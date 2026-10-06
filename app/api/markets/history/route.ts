@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+// Built as a static route: rebuilt every 5 minutes, even when an early return skips the cached fetch.
+export const revalidate = 300;
+
 // Daily history of the main indices over the last month: the latest sessions'
 // performance and the traded volumes shown in the "Bourse" section of /actualites.
 

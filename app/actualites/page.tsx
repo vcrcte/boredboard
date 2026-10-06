@@ -42,14 +42,14 @@ const MarketsDashboard = dynamic(() => import("@/components/MarketsDashboard"), 
 });
 
 const filters: { label: string; params: NewsParams; slug?: string; bourse?: boolean }[] = [
-  { label: "Tout", params: {} },
+  { label: "Tout", params: { category: "general" } },
   { label: "France", params: { q: "France" } },
-  { label: "Monde", params: { q: "international" } },
-  { label: "Science", params: { category: "Science" } },
-  { label: "Tech", params: { category: "Tech" } },
-  { label: "Économie", params: { q: "économie bourse" } },
+  { label: "Monde", params: { category: "world" } },
+  { label: "Science", params: { category: "science" } },
+  { label: "Tech", params: { category: "technology" } },
+  { label: "Économie", params: { category: "business" } },
   { label: "Géopolitique", params: { q: "géopolitique diplomatie" } },
-  { label: "Culture", params: { q: "culture art cinéma" } },
+  { label: "Culture", params: { category: "entertainment" } },
   // The markets dashboard, formerly its own /marches page.
   { label: "Bourse", params: {}, slug: "bourse", bourse: true },
 ];
@@ -278,7 +278,7 @@ export default function Actualites() {
       <style>{css}</style>
       <Navbar />
 
-      <main className="mx-auto" style={{ maxWidth: 860, padding: "40px 20px" }}>
+      <main className="mx-auto w-full px-4 sm:px-5" style={{ maxWidth: 860, paddingBlock: 40 }}>
         <header style={{ paddingTop: 60 }}>
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
             <h1 style={{ fontFamily: GEORGIA, fontSize: "clamp(32px, 7vw, 42px)", fontWeight: 400, color: TEXT, letterSpacing: "-1px" }}>

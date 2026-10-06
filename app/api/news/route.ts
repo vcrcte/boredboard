@@ -1,99 +1,64 @@
 import { NextResponse } from "next/server";
 
-const NEWSAPI = "https://newsapi.org/v2";
+// Articles from GNews, reshaped into the NewsAPI format the pages already read.
+// Failures answer 200 with no articles: the page shows its "retry" message.
 
+type GNewsArticle = {
+  title: string | null;
+  description: string | null;
+  url: string | null;
+  image: string | null;
+  publishedAt: string;
+  source?: { name?: string };
+};
+
+// GNews categories, plus the labels the pages send (dashboard: "Actualités").
 const categoryMap: Record<string, string> = {
+  general: "general",
   Actualités: "general",
-  Science: "science",
-  Tech: "technology",
-  Sport: "sports",
-  Santé: "health",
-};
-
-// NewsAPI's top-headlines endpoint returns nothing in French, so each category
-// falls back to the /everything endpoint: the latest articles of the main
-// French outlets for the general feed, a keyword search for the others.
-const GENERAL_DOMAINS = [
-  "lemonde.fr",
-  "lefigaro.fr",
-  "liberation.fr",
-  "francetvinfo.fr",
-  "bfmtv.com",
-  "20minutes.fr",
-  "lexpress.fr",
-  "leparisien.fr",
-  "ouest-france.fr",
-  "huffingtonpost.fr",
-  "courrierinternational.com",
-  "lesechos.fr",
-  "mediapart.fr",
-  "lepoint.fr",
-  "nouvelobs.com",
-].join(",");
-
-const fallbackQueries: Record<string, string> = {
   science: "science",
-  technology: "technologie",
-  sports: "sport",
-  health: "santé",
+  Science: "science",
+  technology: "technology",
+  Tech: "technology",
+  business: "business",
+  entertainment: "entertainment",
+  health: "health",
+  sports: "sports",
+  world: "world",
+  nation: "nation",
 };
-
-type NewsApiResponse = {
-  status: string;
-  message?: string;
-  articles?: { title: string | null; description: string | null; url: string | null }[];
-};
-
-async function fetchNews(path: string): Promise<{ ok: boolean; data: NewsApiResponse }> {
-  const res = await fetch(`${NEWSAPI}/${path}&apiKey=${process.env.NEWSAPI_KEY}`, {
-    next: { revalidate: 300 },
-  });
-  const data = (await res.json()) as NewsApiResponse;
-  return { ok: res.ok && data.status === "ok", data };
-}
-
-const everything = (query: string) =>
-  `everything?q=${encodeURIComponent(query)}&language=fr&sortBy=publishedAt&pageSize=20`;
 
 export async function GET(request: Request) {
-  if (!process.env.NEWSAPI_KEY) {
-    return NextResponse.json({ status: "error", message: "NEWSAPI_KEY manquante" }, { status: 500 });
-  }
-
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category") || "general";
   const query = searchParams.get("q") || "";
-  const apiCategory = categoryMap[category] || "general";
+
+  const apiKey = process.env.GNEWS_API_KEY;
+  if (!apiKey) return NextResponse.json({ status: "error", message: "GNEWS_API_KEY manquante", articles: [] });
 
   try {
-    let result = await fetchNews(
-      query
-        ? everything(query)
-        : `top-headlines?language=fr&category=${apiCategory}&pageSize=20`,
-    );
+    const url = query
+      ? `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=fr&max=20&apikey=${apiKey}`
+      : `https://gnews.io/api/v4/top-headlines?category=${categoryMap[category] || "general"}&lang=fr&max=20&apikey=${apiKey}`;
 
-    if (!query && result.ok && (result.data.articles?.length ?? 0) === 0) {
-      result = await fetchNews(
-        apiCategory === "general"
-          ? `everything?domains=${GENERAL_DOMAINS}&language=fr&sortBy=publishedAt&pageSize=20`
-          : everything(fallbackQueries[apiCategory]),
-      );
-    }
+    const res = await fetch(url, { next: { revalidate: 900 } }); // cache 15 minutes
+    const data = await res.json();
+    if (!res.ok) return NextResponse.json({ status: "error", message: data.errors?.[0] ?? "Erreur GNews", articles: [] });
 
-    if (!result.ok) {
-      return NextResponse.json(
-        { status: "error", message: result.data.message ?? "Erreur NewsAPI" },
-        { status: 502 },
-      );
-    }
+    const articles = ((data.articles ?? []) as GNewsArticle[])
+      .filter((article) => article.url && article.title && article.description)
+      .map((article) => ({
+        title: article.title,
+        description: article.description,
+        url: article.url,
+        urlToImage: article.image,
+        publishedAt: article.publishedAt,
+        source: { name: article.source?.name || "Source inconnue" },
+        author: article.source?.name ?? null,
+      }));
 
-    // NewsAPI keeps withdrawn articles as "[Removed]" placeholders; articles
-    // without a description have nothing to show beyond their title.
-    const articles = (result.data.articles ?? []).filter(
-      (article) => article.url && article.title && article.title !== "[Removed]" && article.description,
-    );
     return NextResponse.json({ status: "ok", articles });
   } catch {
-    return NextResponse.json({ status: "error", message: "NewsAPI injoignable" }, { status: 502 });
+    return NextResponse.json({ status: "error", message: "GNews injoignable", articles: [] });
   }
 }

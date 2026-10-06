@@ -15,12 +15,13 @@ const geistMono = localFont({
 
 const title = "BoredBoard — Pour les esprits curieux";
 const description =
-  "Un dashboard vivant mêlant actualités, culture, musique, livres et mini-jeux.";
+  "Un dashboard vivant mêlant actualités, culture, musique et livres.";
 
 // Absolute URLs (og:image) are resolved against the deployed address when there is one.
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+// Vercel's own production address first: NEXT_PUBLIC_SITE_URL is set to
+// boredboard.vercel.app, a site that belongs to someone else.
+const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+const siteUrl = vercelHost ? `https://${vercelHost}` : (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

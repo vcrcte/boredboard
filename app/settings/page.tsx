@@ -151,7 +151,7 @@ export default function Settings() {
   return (
     <div className="min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
       <Navbar />
-      <main className="mx-auto" style={{ maxWidth: 560, padding: 40 }}>
+      <main className="mx-auto px-4 sm:px-10" style={{ maxWidth: 560, paddingBlock: 40 }}>
         <h1 className="mb-6" style={{ fontFamily: GEORGIA, fontSize: 28, fontWeight: 400, color: TEXT }}>Paramètres</h1>
 
         <form onSubmit={save} aria-busy={!loaded}>

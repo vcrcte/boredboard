@@ -79,10 +79,11 @@ const css = `
 .mk-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 /* Columns stretch to the tallest one; the last card of each absorbs the difference. */
 .mk-col > :last-child { flex: 1; }
-.mk-col-1 { flex: 0 0 220px; }
-.mk-col-2 { flex: 0 0 300px; }
-.mk-col-3 { flex: 1; }
-.mk-col-4 { flex: 0 0 260px; }
+.mk-col-1 { flex: 1 1 0; }
+/* Actions and Top news take the remaining width; Forex, rates and commodities keep a narrow column. */
+.mk-col-2 { flex: 1 1 0; }
+.mk-col-3 { flex: 1 1 0; }
+.mk-col-4 { flex: 1 1 0; }
 @media (max-width: 1199px) {
   .mk-cols { flex-wrap: wrap; }
   .mk-col-1, .mk-col-2, .mk-col-3, .mk-col-4 { flex: 1 1 calc(50% - 8px); }
@@ -834,7 +835,7 @@ export default function MarketsDashboard({ session }: { session: Session }) {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 items-stretch md:grid-cols-3 lg:grid-cols-5" style={{ gap: 1, background: black(0.06), border: `1px solid ${black(0.06)}` }}>
+          <div className="grid grid-cols-1 items-stretch sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5" style={{ gap: 1, background: black(0.06), border: `1px solid ${black(0.06)}` }}>
             {heroIndices
               ? heroIndices.map((quote) => <HeroIndex key={quote.symbol} quote={quote} />)
               : HERO_SYMBOLS.map((symbol) => (

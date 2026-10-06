@@ -36,8 +36,6 @@ export async function POST(request: Request) {
         .maybeSingle()
       userId = data?.user_id
     }
-    // Only the start of the token: Vercel keeps its logs, a full token is enough to post.
-    console.log('Token reçu:', `${String(token).slice(0, 8)}…`, 'userId:', userId)
 
     if (!userId) {
       return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
@@ -64,7 +62,7 @@ export async function POST(request: Request) {
           finalMetadata = { ...embedData, url }
         }
       } catch (e) {
-        console.log('Erreur oEmbed:', e)
+        console.error('Erreur oEmbed:', e)
       }
     }
 

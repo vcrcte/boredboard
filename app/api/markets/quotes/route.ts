@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
+import YahooFinance from "yahoo-finance2";
 import { SYMBOL_PATTERN, type MarketGroups, type Quote, type QuoteKind } from "@/lib/markets";
+
+// yahoo-finance2 v4 exports a class: one client for the whole route.
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 type Instrument = { symbol: string; name: string; detail?: string };
 
@@ -121,34 +125,37 @@ const YAHOO_KINDS: Record<string, QuoteKind> = {
 
 async function fetchQuote(symbol: string): Promise<Quote | null> {
   try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=30m&range=1d`,
-      { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 60 } },
-    );
-    if (!res.ok) return null;
-    const result = (await res.json())?.chart?.result?.[0];
-    const meta = result?.meta;
-    const price = meta?.regularMarketPrice;
-    const previousClose = meta?.chartPreviousClose ?? meta?.previousClose;
+    // quoteCombine groups the concurrent calls of a request into one Yahoo query.
+    const result = await yahooFinance.quoteCombine(symbol);
+    const price = result?.regularMarketPrice;
+    const previousClose = result?.regularMarketPreviousClose;
     if (typeof price !== "number" || typeof previousClose !== "number") return null;
 
-    // The chart endpoint doesn't return the day's change, so it is derived
-    // from the previous close.
     const change = price - previousClose;
     const known = KNOWN.get(symbol);
-    // Today's 30-minute closes, for the sparkline (gaps in the series are dropped).
-    const closes: unknown[] = result?.indicators?.quote?.[0]?.close ?? [];
-    const spark = closes.filter((value): value is number => typeof value === "number").slice(-20);
+
+    // Last day's 30-minute closes, for the sparkline (gaps in the series are dropped).
+    let spark: number[] = [];
+    try {
+      const chart = await yahooFinance.chart(symbol, { period1: new Date(Date.now() - 86_400_000), interval: "30m" });
+      spark = (chart.quotes ?? [])
+        .map((q) => q.close)
+        .filter((v): v is number => typeof v === "number")
+        .slice(-20);
+    } catch {
+      // No sparkline: the quote is still shown.
+    }
+
     return {
       symbol,
-      name: known?.name ?? meta.shortName ?? meta.longName ?? symbol,
+      name: known?.name ?? result.shortName ?? result.longName ?? symbol,
       detail: known?.detail,
-      kind: known?.kind ?? YAHOO_KINDS[meta.instrumentType] ?? "stock",
+      kind: known?.kind ?? YAHOO_KINDS[result.quoteType ?? ""] ?? "stock",
       price,
       change,
       changePercent: previousClose ? (change / previousClose) * 100 : 0,
       previousClose,
-      currency: meta.currency ?? null,
+      currency: result.currency ?? null,
       spark,
     };
   } catch {
@@ -159,6 +166,8 @@ async function fetchQuote(symbol: string): Promise<Quote | null> {
 async function fetchQuotes(symbols: string[]) {
   return (await Promise.all(symbols.map(fetchQuote))).filter((quote): quote is Quote => quote !== null);
 }
+
+export const revalidate = 60;
 
 export async function GET(request: Request) {
   // `?symbols=AAPL,NVDA` returns just those quotes (used by the watchlist).

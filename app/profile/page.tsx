@@ -315,7 +315,15 @@ export default function ProfilePage() {
     (async () => {
       const [profileResult, postsResult, booksResult] = await Promise.all([
         supabase.from("profiles").select("username, name, bio, location, interests").eq("id", userId).maybeSingle(),
-        supabase.from("posts").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+        supabase
+          .from("posts")
+          .select("*")
+          .eq("user_id", userId)
+          // Leftovers from testing the Apple Shortcut, as in the feed.
+          .not("content", "ilike", "%Morceau actuel%")
+          .not("content", "ilike", "%Test du Raccourci%")
+          .order("created_at", { ascending: false })
+          .limit(20),
         supabase.from("books").select("id, title, author, status, page_current, page_total").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
       ]);
       if (cancelled) return;
@@ -518,7 +526,7 @@ export default function ProfilePage() {
         </aside>
 
         {/* Centre column */}
-        <main className="min-w-0 overflow-y-auto" style={{ background: CREAM, padding: "0 20px 40px" }}>
+        <main className="min-w-0 overflow-y-auto px-3 md:px-5" style={{ background: CREAM, paddingBottom: 40 }}>
           <div className="sticky top-0 z-10 mb-4" style={{ background: CREAM, paddingTop: 20, borderBottom: `1px solid ${black(0.06)}` }}>
             <div className="pf-noscrollbar flex overflow-x-auto">
               {tabs.map((item) => (

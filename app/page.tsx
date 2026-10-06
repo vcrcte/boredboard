@@ -87,7 +87,7 @@ const footerLinks = ["Manifeste", "Confidentialité", "Contact"];
 
 const heroStats = [
   { value: "2 400+", label: "Curieux inscrits" },
-  { value: "6", label: "Mini-jeux" },
+  { value: "∞", label: "Contenus" },
   { value: "∞", label: "Sujets à découvrir" },
 ];
 
@@ -97,7 +97,7 @@ const GREEN = "#1D9E75";
 
 const stats = [
   { value: "2 400+", label: "Curieux inscrits", color: TEXT },
-  { value: "6", label: "Mini-jeux", color: GOLD },
+  { value: "∞", label: "Contenus", color: GOLD },
   { value: "∞", label: "Sujets", color: TEXT },
   { value: "0€", label: "Pour commencer", color: GOLD },
 ];
@@ -107,7 +107,7 @@ const previewNav = [
   { icon: "🧭", label: "Explorer" },
   { icon: "🎵", label: "Musique" },
   { icon: "📖", label: "Livres" },
-  { icon: "🎮", label: "Jeux" },
+  { icon: "📰", label: "Actualités" },
   { icon: "✉️", label: "Newsletter" },
 ];
 
@@ -124,11 +124,8 @@ const previewSpaces = [
   { icon: "🎵", title: "Musique", detail: "4 titres" },
   { icon: "📖", title: "Livres", detail: "3 en cours" },
   { icon: "🎙", title: "Podcasts", detail: "2 favoris" },
-  { icon: "🎮", title: "Jeux", detail: "Série 7j" },
+  { icon: "📰", title: "Actualités", detail: "12 à lire" },
 ];
-
-const quizQuestion = "Quel philosophe a théorisé la 'volonté de puissance' ?";
-const quizOptions = ["Nietzsche", "Schopenhauer", "Kant", "Spinoza"];
 
 const previewTrends = [
   { topic: "Géopolitique de l'eau", count: "2.4k" },
@@ -140,7 +137,7 @@ const previewTrends = [
 const newsletterTags = ["Taïwan", "Stoïcisme", "Floating Points"];
 
 const TICKER =
-  "Actualités · Culture · Musique · Livres · Mini-jeux · Géopolitique · Philosophie · Science · Art · Histoire · Cinéma · Littérature · Curiosité · ";
+  "Actualités · Culture · Musique · Livres · Géopolitique · Philosophie · Science · Art · Histoire · Cinéma · Littérature · Curiosité · ";
 
 const MANIFESTO =
   "Nous croyons que l'ennui est le début de tout. C'est quand rien ne se passe qu'on commence à chercher, à lire, à écouter, à découvrir. BoredBoard est fait pour ces moments-là.";
@@ -187,22 +184,6 @@ const feedBullets = [
   "Des sujets et des personnes à suivre",
   "Des filtres qui s'appliquent en un clic",
   "Aucun contenu imposé",
-];
-
-const miniGames: {
-  icon: string;
-  title: string;
-  players: string;
-  background: string;
-  border: string;
-  badge?: { label: string; background: string; color: string };
-}[] = [
-  { icon: "🌍", title: "GéoBlitz", players: "1.2k joueurs", background: indigo(0.12), border: indigo(0.2), badge: { label: "Quotidien", background: "rgba(29,158,117,0.15)", color: "#1D9E75" } },
-  { icon: "👻", title: "Mot Fantôme", players: "980 joueurs", background: gold(0.06), border: gold(0.15), badge: { label: "Nouveau", background: "rgba(131,77,255,0.15)", color: "#A87FFF" } },
-  { icon: "⏳", title: "Chrono", players: "640 joueurs", background: white(0.7), border: CARD_BORDER },
-  { icon: "🎧", title: "Blind Test", players: "510 joueurs", background: "rgba(131,77,255,0.08)", border: "rgba(131,77,255,0.18)" },
-  { icon: "🗺", title: "Frontières", players: "430 joueurs", background: "rgba(29,158,117,0.08)", border: "rgba(29,158,117,0.18)" },
-  { icon: "❝", title: "Qui l'a dit ?", players: "390 joueurs", background: white(0.7), border: CARD_BORDER },
 ];
 
 const socials = [
@@ -527,19 +508,6 @@ function DashboardPreview() {
         </div>
 
         <PanelDivider />
-        <PanelLabel>Quiz du jour</PanelLabel>
-        <div style={{ background: white(0.7), borderRadius: 8, padding: 10 }}>
-          <p style={{ fontSize: 10, lineHeight: 1.4, color: TEXT }}>{quizQuestion}</p>
-          <div className="mt-2 grid grid-cols-2" style={{ gap: 4 }}>
-            {quizOptions.map((option) => (
-              <span key={option} className="truncate text-center" style={{ background: white(0.8), borderRadius: 6, fontSize: 9, color: DIM, padding: "5px 7px" }}>
-                {option}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <PanelDivider />
         <PanelLabel>Tendances</PanelLabel>
         <ul className="flex flex-col gap-1.5">
           {previewTrends.map((trend) => (
@@ -732,7 +700,7 @@ export default function Home() {
 
             <FadeUp delay={550}>
               <p style={{ fontSize: 15, lineHeight: 1.8, color: heroText(0.45), maxWidth: 460, marginTop: 28 }}>
-                Actualités, culture, musique, livres, mini-jeux — tout ce qui
+                Actualités, culture, musique, livres, contenus — tout ce qui
                 éveille ta curiosité, dans un seul endroit.
               </p>
             </FadeUp>
@@ -843,35 +811,9 @@ export default function Home() {
 
             <FeatureRow
               number="02"
-              title="Joue, découvre, refais."
-              description="Six mini-jeux quotidiens — géographie, mots, histoire, musique. Deux minutes suffisent pour apprendre quelque chose de nouveau."
-              reverse
-            >
-              <div className="grid grid-cols-2" style={{ gap: 10 }}>
-                {miniGames.map((game) => (
-                  <div key={game.title} style={{ background: game.background, border: `1px solid ${game.border}`, borderRadius: 12, padding: 14 }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <p aria-hidden style={{ fontSize: 18 }}>{game.icon}</p>
-                      {game.badge && (
-                        <span style={{ background: game.badge.background, color: game.badge.color, fontSize: 9, borderRadius: 20, padding: "2px 7px" }}>
-                          {game.badge.label}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-2" style={{ fontSize: 12, color: TEXT }}>{game.title}</p>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span style={{ fontSize: 10, color: GOLD }}>Jouer →</span>
-                      <span style={{ fontSize: 9, color: DIM }}>{game.players}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </FeatureRow>
-
-            <FeatureRow
-              number="03"
               title="Tes livres et ta musique, partagés."
               description="Montre ce que tu lis, partage ce que tu écoutes. Inspire tes contacts. Découvre ce qui les inspire."
+              reverse
             >
               <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 10 }}>
                 <ReadingCard />
