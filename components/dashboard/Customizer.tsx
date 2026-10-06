@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FEED_ORDERS, MODULES, THEMES, type ModuleId, type Preferences } from "@/lib/preferences";
 
 const CREAM = "#F7F4EE";
@@ -38,6 +38,13 @@ export default function Customizer({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
+  // Drag & drop state for module reordering.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  // Touch-drag state (HTML5 drag events don't fire on mobile).
+  const touchRef = useRef<{ startY: number; itemHeight: number; index: number } | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true));
     return () => cancelAnimationFrame(frame);
@@ -59,6 +66,68 @@ export default function Customizer({
   const toggleModule = (id: ModuleId) => setDraft({ ...draft, modules: { ...draft.modules, [id]: !draft.modules[id] } });
   const toggleTheme = (theme: string) =>
     setDraft({ ...draft, themes: draft.themes.includes(theme) ? draft.themes.filter((item) => item !== theme) : [...draft.themes, theme] });
+
+  // Resolve the ordered modules list: use draft.moduleOrder, falling back to MODULES order.
+  const orderedModules = draft.moduleOrder.map((id) => MODULES.find((m) => m.id === id)!).filter(Boolean);
+
+  const reorder = (from: number, to: number) => {
+    if (from === to) return;
+    const newOrder = [...draft.moduleOrder];
+    const [moved] = newOrder.splice(from, 1);
+    newOrder.splice(to, 0, moved);
+    setDraft({ ...draft, moduleOrder: newOrder });
+  };
+
+  // Desktop drag handlers.
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    // Make the drag image semi-transparent.
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
+    }
+  };
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setOverIndex(index);
+  };
+  const handleDrop = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragIndex !== null) reorder(dragIndex, index);
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+
+  // Touch drag handlers for mobile.
+  const handleTouchStart = (index: number) => (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const item = (e.currentTarget as HTMLElement).closest("li");
+    touchRef.current = { startY: touch.clientY, itemHeight: item?.offsetHeight ?? 48, index };
+    setDragIndex(index);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchRef.current || !listRef.current) return;
+    const touch = e.touches[0];
+    const delta = touch.clientY - touchRef.current.startY;
+    const offset = Math.round(delta / touchRef.current.itemHeight);
+    const newIndex = Math.max(0, Math.min(orderedModules.length - 1, touchRef.current.index + offset));
+    setOverIndex(newIndex);
+  };
+  const handleTouchEnd = () => {
+    if (dragIndex !== null && overIndex !== null) reorder(dragIndex, overIndex);
+    touchRef.current = null;
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+
+  // Move with keyboard (up/down buttons).
+  const moveUp = (index: number) => { if (index > 0) reorder(index, index - 1); };
+  const moveDown = (index: number) => { if (index < orderedModules.length - 1) reorder(index, index + 1); };
 
   const save = async () => {
     setSaving(true);
@@ -97,31 +166,85 @@ export default function Customizer({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <Section title="Mes modules" subtitle="Choisis les sections à afficher dans ton feed">
-            <ul>
-              {MODULES.map((module, index) => {
+          <Section title="Mes modules" subtitle="Active, désactive et réordonne les sections de ton feed">
+            <ul ref={listRef}>
+              {orderedModules.map((module, index) => {
                 const on = draft.modules[module.id];
+                const isDragging = dragIndex === index;
+                const isOver = overIndex === index && dragIndex !== null && dragIndex !== index;
                 return (
-                  <li key={module.id} style={{ borderBottom: index < MODULES.length - 1 ? `1px solid ${black(0.05)}` : "none" }}>
-                    <label className="flex cursor-pointer items-center justify-between gap-3" style={{ padding: "10px 0" }}>
-                      <span className="min-w-0">
-                        <span className="block" style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>
-                          <span aria-hidden>{module.icon}</span> {module.name}
-                        </span>
-                        <span className="mt-0.5 block" style={{ fontSize: 11, color: DIM }}>{module.description}</span>
-                      </span>
-                      <input type="checkbox" role="switch" checked={on} onChange={() => toggleModule(module.id)} className="sr-only" />
-                      <span
-                        aria-hidden
-                        className="relative shrink-0"
-                        style={{ width: 34, height: 20, borderRadius: 10, background: on ? INDIGO : "#E5E7EB", transition: "background-color 0.2s" }}
+                  <li
+                    key={module.id}
+                    draggable
+                    onDragStart={handleDragStart(index)}
+                    onDragOver={handleDragOver(index)}
+                    onDrop={handleDrop(index)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      borderBottom: index < orderedModules.length - 1 ? `1px solid ${black(0.05)}` : "none",
+                      opacity: isDragging ? 0.4 : 1,
+                      borderTop: isOver ? `2px solid ${INDIGO}` : "2px solid transparent",
+                      transition: "opacity 0.15s, border-top-color 0.15s",
+                    }}
+                  >
+                    <div className="flex items-center gap-2" style={{ padding: "10px 0" }}>
+                      {/* Drag handle */}
+                      <button
+                        type="button"
+                        aria-label={`Réordonner ${module.name}`}
+                        className="flex shrink-0 cursor-grab touch-none flex-col items-center justify-center active:cursor-grabbing"
+                        style={{ width: 20, height: 20, color: ink(0.3), fontSize: 10, lineHeight: 1, letterSpacing: "2px" }}
+                        onTouchStart={handleTouchStart(index)}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
                       >
+                        ⠿
+                      </button>
+
+                      {/* Up/down keyboard-accessible buttons */}
+                      <div className="flex shrink-0 flex-col" style={{ gap: 0 }}>
+                        <button
+                          type="button"
+                          aria-label={`Monter ${module.name}`}
+                          disabled={index === 0}
+                          onClick={() => moveUp(index)}
+                          className="disabled:opacity-20"
+                          style={{ fontSize: 8, color: ink(0.4), lineHeight: 1, padding: "1px 2px" }}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Descendre ${module.name}`}
+                          disabled={index === orderedModules.length - 1}
+                          onClick={() => moveDown(index)}
+                          className="disabled:opacity-20"
+                          style={{ fontSize: 8, color: ink(0.4), lineHeight: 1, padding: "1px 2px" }}
+                        >
+                          ▼
+                        </button>
+                      </div>
+
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="block" style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>
+                            <span aria-hidden>{module.icon}</span> {module.name}
+                          </span>
+                          <span className="mt-0.5 block" style={{ fontSize: 11, color: DIM }}>{module.description}</span>
+                        </span>
+                        <input type="checkbox" role="switch" checked={on} onChange={() => toggleModule(module.id)} className="sr-only" />
                         <span
-                          className="absolute"
-                          style={{ top: 2, left: 2, width: 16, height: 16, borderRadius: "50%", background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.2)", transform: on ? "translateX(14px)" : "translateX(0)", transition: "transform 0.2s" }}
-                        />
-                      </span>
-                    </label>
+                          aria-hidden
+                          className="relative shrink-0"
+                          style={{ width: 34, height: 20, borderRadius: 10, background: on ? INDIGO : "#E5E7EB", transition: "background-color 0.2s" }}
+                        >
+                          <span
+                            className="absolute"
+                            style={{ top: 2, left: 2, width: 16, height: 16, borderRadius: "50%", background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.2)", transform: on ? "translateX(14px)" : "translateX(0)", transition: "transform 0.2s" }}
+                          />
+                        </span>
+                      </label>
+                    </div>
                   </li>
                 );
               })}

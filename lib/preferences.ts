@@ -37,14 +37,19 @@ export type FeedOrder = (typeof FEED_ORDERS)[number]["id"];
 
 export type Preferences = {
   modules: Record<ModuleId, boolean>;
+  /** Display order of the modules in the feed and Customizer. */
+  moduleOrder: ModuleId[];
   themes: string[];
   order: FeedOrder;
 };
 
 export const STORAGE_KEY = "boredboard-preferences";
 
+export const DEFAULT_MODULE_ORDER: ModuleId[] = MODULES.map((module) => module.id);
+
 export const DEFAULT_PREFERENCES: Preferences = {
   modules: Object.fromEntries(MODULES.map((module) => [module.id, true])) as Record<ModuleId, boolean>,
+  moduleOrder: DEFAULT_MODULE_ORDER,
   themes: [],
   order: "equilibre",
 };
@@ -61,7 +66,15 @@ export function sanitizePreferences(value: unknown): Preferences | null {
     ? raw.themes.filter((theme): theme is string => (THEMES as readonly string[]).includes(theme))
     : [];
   const order = FEED_ORDERS.some((option) => option.id === raw.order) ? (raw.order as FeedOrder) : "equilibre";
-  return { modules, themes, order };
+  const knownIds = new Set<string>(MODULES.map((m) => m.id));
+  const moduleOrder: ModuleId[] = Array.isArray((raw as Record<string, unknown>).moduleOrder)
+    ? ((raw as Record<string, unknown>).moduleOrder as string[]).filter((id): id is ModuleId => knownIds.has(id))
+    : [];
+  // Append any modules missing from the saved order (new modules added after the user saved).
+  for (const m of MODULES) {
+    if (!moduleOrder.includes(m.id)) moduleOrder.push(m.id);
+  }
+  return { modules, moduleOrder, themes, order };
 }
 
 export function readLocalPreferences(): Preferences | null {

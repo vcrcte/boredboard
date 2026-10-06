@@ -907,33 +907,36 @@ export default function Dashboard() {
     postItems.push({ key: "welcome", tags: [], node: <WelcomeCard onNewPost={() => setModalOpen(true)} /> });
   }
 
-  // 2. What the network is doing right now.
-  const socialItems = ([
-    on("musique") && { key: "listening", tags: ["Musique"], node: <NowListeningCard /> },
-    on("livres") && { key: "reading", tags: ["Livres"], node: <ReadingNowCard /> },
-    on("reactions") && { key: "discussions", tags: [], node: <DiscussionsCard /> },
-  ] as (FeedItem | false)[]).filter((item): item is FeedItem => Boolean(item));
+  // 2. Social + news items, assembled then sorted by the user's moduleOrder.
+  const moduleItems: Record<string, FeedItem[]> = {};
 
-  // 3. Articles matching the themes, and the markets flash.
-  const newsItems: FeedItem[] = [];
-  if (on("marches")) newsItems.push({ key: "markets", tags: ["Actualités"], node: <MarketsFlashCard /> });
+  if (on("musique")) (moduleItems["musique"] ??= []).push({ key: "listening", tags: ["Musique"], node: <NowListeningCard /> });
+  if (on("livres")) (moduleItems["livres"] ??= []).push({ key: "reading", tags: ["Livres"], node: <ReadingNowCard /> });
+  if (on("reactions")) (moduleItems["reactions"] ??= []).push({ key: "discussions", tags: [], node: <DiscussionsCard /> });
+  if (on("marches")) (moduleItems["marches"] ??= []).push({ key: "markets", tags: ["Actualités"], node: <MarketsFlashCard /> });
   if (on("actualites")) {
+    const items: FeedItem[] = [];
     if (news.error) {
-      newsItems.push({ key: "news-error", tags: ["Actualités"], node: <NewsError onRetry={news.retry} /> });
+      items.push({ key: "news-error", tags: ["Actualités"], node: <NewsError onRetry={news.retry} /> });
     } else if (news.loading || !news.articles) {
-      newsItems.push({ key: "news-loading", tags: ["Actualités"], node: <NewsSkeleton /> });
+      items.push({ key: "news-loading", tags: ["Actualités"], node: <NewsSkeleton /> });
     } else {
       for (const article of news.articles.slice(0, NEWS_IN_FEED)) {
-        newsItems.push({
+        items.push({
           key: article.url,
           tags: ["Actualités"],
           node: <NewsCard article={article} user={session.user} onShared={loadPosts} />,
         });
       }
     }
+    moduleItems["actualites"] = items;
   }
 
-  // 4. Recommendations (fed by the news API; the static placeholder has been removed).
+  // Sort module items by user's moduleOrder preference.
+  const sortedModuleItems: FeedItem[] = preferences.moduleOrder
+    .flatMap((id) => moduleItems[id] ?? []);
+
+  // 3. Recommendations (fed by the news API; the static placeholder has been removed).
   const discoveryItems: FeedItem[] = [];
 
   const interleave = (first: FeedItem[], second: FeedItem[]) =>
@@ -943,10 +946,10 @@ export default function Dashboard() {
 
   const feedItems =
     preferences.order === "social"
-      ? [...postItems, ...socialItems, ...newsItems, ...discoveryItems]
+      ? [...postItems, ...sortedModuleItems, ...discoveryItems]
       : preferences.order === "actualites"
-        ? [...newsItems, ...postItems, ...socialItems, ...discoveryItems]
-        : [...postItems, ...interleave(socialItems, newsItems), ...discoveryItems];
+        ? [...sortedModuleItems, ...postItems, ...discoveryItems]
+        : [...interleave(postItems, sortedModuleItems), ...discoveryItems];
   const isVisible = (tags: string[]) => filter === "Tout" || tags.includes(filter);
   const hasVisibleItem = feedItems.some((item) => isVisible(item.tags));
 
