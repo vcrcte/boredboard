@@ -36,6 +36,7 @@ import {
 } from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
 import { avatarTones } from "@/lib/sample-data";
+import { getUserSubscriptions, NEWSLETTER_SOURCES } from "@/lib/newsletter";
 import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
@@ -95,6 +96,18 @@ type Post = {
 };
 
 type Profile = { name: string | null; username: string; location: string | null };
+
+type NewsletterArticle = {
+  title: string;
+  description: string;
+  url: string;
+  source_id: string;
+  source_name: string;
+  source_icon: string;
+  source_color: string;
+  theme: string;
+  published_at: string;
+};
 
 // Recommended articles shown in the feed when the news module is on.
 const NEWS_IN_FEED = 3;
@@ -744,6 +757,70 @@ function NewPostModal({
   );
 }
 
+// ── Newsletter article card (shown in the feed) ──────────────────────
+
+function NewsletterFeedCard({ articles }: { articles: NewsletterArticle[] }) {
+  if (articles.length === 0) return null;
+  return (
+    <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+      <div className="flex items-center gap-2" style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${black(0.05)}` }}>
+        <span style={{ fontSize: 16 }}>📬</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Tes newsletters</span>
+        <Link href="/newsletter" className="ml-auto db-hover" style={{ fontSize: 11, color: INDIGO, fontWeight: 500, padding: "2px 8px", borderRadius: 6 }}>
+          Gérer →
+        </Link>
+      </div>
+      <div className="flex flex-col" style={{ gap: 0 }}>
+        {articles.map((a, i) => (
+          <a
+            key={`${a.source_id}-${i}`}
+            href={a.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="db-hover flex gap-3"
+            style={{
+              padding: "12px 16px",
+              textDecoration: "none",
+              borderBottom: i < articles.length - 1 ? `1px solid ${black(0.04)}` : undefined,
+            }}
+          >
+            <span
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: a.source_color,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                flexShrink: 0,
+              }}
+            >
+              {a.source_icon}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT, lineHeight: 1.3 }}>
+                {a.title}
+              </p>
+              {a.description && (
+                <p className="line-clamp-2" style={{ fontSize: 11, color: ink(0.5), lineHeight: 1.4, marginTop: 2 }}>
+                  {a.description}
+                </p>
+              )}
+              <div className="flex items-center gap-2 mt-1">
+                <span style={{ fontSize: 10, color: ink(0.4) }}>{a.source_name}</span>
+                <span style={{ fontSize: 10, color: ink(0.3) }}>·</span>
+                <span style={{ fontSize: 10, color: ink(0.4) }}>{a.theme}</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   // undefined while the session is still being read, null once known to be absent.
@@ -765,6 +842,8 @@ export default function Dashboard() {
   const [utilityOpen, setUtilityOpen] = useState(false);
   // Users the viewer follows, shown in the left sidebar.
   const [following, setFollowing] = useState<PublicProfile[]>([]);
+  // Newsletter articles from subscribed RSS feeds.
+  const [nlArticles, setNlArticles] = useState<NewsletterArticle[]>([]);
 
   useEffect(() => {
     if (!sidebarOpen && !utilityOpen) return;
@@ -876,6 +955,27 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [userId]);
 
+  // Load newsletter articles from subscribed sources' RSS feeds.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const subs = await getUserSubscriptions(userId);
+      if (cancelled || subs.length === 0) return;
+      const sourceIds = subs.map((s) => s.source_id);
+      // Only fetch sources that have an RSS feed
+      const withFeed = NEWSLETTER_SOURCES.filter((s) => sourceIds.includes(s.id) && s.feed_url);
+      if (withFeed.length === 0) return;
+      try {
+        const res = await fetch(`/api/newsletters?sources=${withFeed.map((s) => s.id).join(",")}`);
+        if (!res.ok) return;
+        const { articles } = await res.json();
+        if (!cancelled) setNlArticles(articles ?? []);
+      } catch { /* silently skip */ }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
   const closeModal = useCallback(() => setModalOpen(false), []);
 
   // Recommended articles: a search on the chosen themes, or the general feed without any.
@@ -939,6 +1039,15 @@ export default function Dashboard() {
       }
     }
     moduleItems["actualites"] = items;
+  }
+
+  // 2b. Newsletter articles from subscribed RSS feeds
+  if (nlArticles.length > 0) {
+    (moduleItems["actualites"] ??= []).push({
+      key: "newsletter-feed",
+      tags: ["Actualités"],
+      node: <NewsletterFeedCard articles={nlArticles.slice(0, 5)} />,
+    });
   }
 
   // Sort module items by user's moduleOrder preference.
