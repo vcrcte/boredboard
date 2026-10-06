@@ -137,7 +137,7 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "🧭", label: "Explorer", href: "/explore" },
   { icon: "🎵", label: "Musique", filter: "Musique" },
   { icon: "📖", label: "Livres", href: "/livres" },
-  { icon: "✉️", label: "Newsletter" },
+  { icon: "✉️", label: "Newsletter", href: "/newsletter" },
 ];
 
 const spaces: { icon: string; title: string; detail: string; filter?: string; href?: string }[] = [
@@ -147,7 +147,6 @@ const spaces: { icon: string; title: string; detail: string; filter?: string; hr
 ];
 
 
-const newsletterTags = ["Tes articles", "Tendances", "Musique", "Livres"];
 
 const card: CSSProperties = {
   background: WHITE,
@@ -753,7 +752,6 @@ export default function Dashboard() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [filter, setFilter] = useState("Tout");
   const [modalOpen, setModalOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   // null while the feed is loading.
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
@@ -1269,6 +1267,14 @@ export default function Dashboard() {
               Mes livres
             </Link>
             <Link
+              href="/newsletter"
+              className="db-hover flex items-center"
+              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+            >
+              <span aria-hidden style={{ fontSize: 14 }}>📬</span>
+              Newsletters
+            </Link>
+            <Link
               href="/explore"
               className="db-hover flex items-center"
               style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
@@ -1334,33 +1340,16 @@ export default function Dashboard() {
           <Divider />
 
           {/* Newsletter */}
-          <SectionLabel>Ta newsletter · demain</SectionLabel>
-          <div style={{ background: CREAM, borderRadius: 12, padding: 12 }}>
-            <p className="mb-1" style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>Curio Daily — demain matin</p>
-            <p className="mb-2" style={{ fontSize: 11, color: DIM }}>Générée à partir de tes 3 derniers jours.</p>
-            <div className="flex flex-wrap" style={{ gap: 4 }}>
-              {newsletterTags.map((tag) => (
-                <span key={tag} style={{ background: black(0.05), borderRadius: 8, fontSize: 10, padding: "2px 8px", color: ink(0.5) }}>
-                  {tag}
-                </span>
-              ))}
+          <SectionLabel>Ta newsletter</SectionLabel>
+          <Link href="/newsletter" style={{ textDecoration: "none" }}>
+            <div className="db-hover" style={{ background: CREAM, borderRadius: 12, padding: 12, cursor: "pointer" }}>
+              <p className="mb-1" style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>📬 Curio Daily</p>
+              <p className="mb-2" style={{ fontSize: 11, color: DIM }}>Découvre et abonne-toi à des newsletters culturelles françaises.</p>
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 11, color: INDIGO, fontWeight: 500 }}>Gérer mes abonnements →</span>
+              </div>
             </div>
-            {previewOpen && (
-              <p className="mt-2" style={{ fontSize: 11, color: ink(0.6), lineHeight: 1.5 }}>
-                Au sommaire : un résumé de tes articles partagés, les tendances de ta communauté,
-                et ce que ton réseau écoute et lit en ce moment.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(!previewOpen)}
-              aria-expanded={previewOpen}
-              className="db-hover mt-2 w-full"
-              style={{ border: `1px solid ${black(0.08)}`, borderRadius: 8, fontSize: 11, padding: 6, color: ink(0.6) }}
-            >
-              {previewOpen ? "Masquer" : "Prévisualiser"}
-            </button>
-          </div>
+          </Link>
         </aside>
       </div>
 
