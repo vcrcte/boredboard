@@ -7,7 +7,6 @@ import Navbar, { getInitials } from "@/components/Navbar";
 import SharedMusicCard from "@/components/MusicCard";
 import { fetchRecentTracks, playedAgo, type LastfmTrack } from "@/lib/lastfm";
 import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
-import { avatarTones, contacts, notifications, trends } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -66,41 +65,8 @@ type Book = {
 
 const tabs = ["Partages", "Musique", "Livres", "Sauvegardés"];
 
-// Shown while the matching profile fields are still empty in Supabase.
-const FALLBACK_LOCATION = "Paris";
-const FALLBACK_BIO =
-  "Salle des marchés · BNP Paribas. Curieux de géopolitique, d'histoire et de tout ce qui dépasse.";
-const FALLBACK_INTERESTS = [
-  "Géopolitique",
-  "Histoire",
-  "Philosophie",
-  "Science",
-  "Musique",
-  "Littérature",
-  "Art",
-  "Économie",
-];
-
-const stats = [
-  { value: "312", label: "interactions", color: TEXT },
-  { value: "48", label: "abonnés", color: TEXT },
-  { value: "21", label: "abonnements", color: TEXT },
-  { value: "7j", label: "de suite", color: GOLD },
-];
-
 const spineColors = ["#EEEDFE", "#E1F5EE", "#FAEEDA"];
-
-const sampleBooks = [
-  { id: "sapiens", title: "Sapiens", author: "Y.N. Harari", status: "p.214 · 48%" },
-  { id: "arendt", title: "La condition humaine", author: "H. Arendt", status: "terminé" },
-  { id: "meditations", title: "Méditations", author: "Marc Aurèle", status: "liste" },
-];
-
-const tracks = [
-  { title: "Nespole", artist: "Floating Points", color: "#EEEDFE" },
-  { title: "Untitled 7", artist: "Burial", color: "#E1F5EE" },
-  { title: "Kind of Blue", artist: "Miles Davis", color: "#FAEEDA" },
-];
+const trackColors = ["#EEEDFE", "#E1F5EE", "#FAEEDA"];
 
 const categoryTones: Record<string, { background: string; color: string }> = {
   Géopolitique: { background: "rgba(29,158,117,0.1)", color: "#0F6E56" },
@@ -111,36 +77,6 @@ const categoryTones: Record<string, { background: string; color: string }> = {
   Art: { background: "rgba(153,53,86,0.08)", color: "#993556" },
 };
 const DEFAULT_TONE = { background: "rgba(83,74,183,0.08)", color: "#534AB7" };
-
-const samplePosts = [
-  {
-    id: "taiwan",
-    category: "Géopolitique",
-    when: "il y a 2h",
-    title: "Détroit de Taïwan : une nouvelle grammaire de la tension",
-    source: "Le Monde · 5 min",
-    quote: null,
-    likes: 47,
-    comments: 12,
-  },
-  {
-    id: "nietzsche",
-    category: "Philosophie",
-    when: "hier",
-    title: "Nietzsche et la volonté de puissance — retour aux sources",
-    source: null,
-    quote: "On ne voit bien qu'avec le cœur — mais le cœur aussi a ses angles morts.",
-    likes: 88,
-    comments: 24,
-  },
-];
-
-const similarProfiles = [
-  { initials: "NL", name: "Nicolas L.", tags: "Histoire · Philo · Géopo", ...avatarTones[5] },
-  { initials: "AV", name: "Amira V.", tags: "Science · Tech · Podcast", ...avatarTones[0] },
-  { initials: "PG", name: "Paul G.", tags: "Géopo · Art · Cinéma", ...avatarTones[2] },
-  { initials: "CM", name: "Clara M.", tags: "Science · Histoire", ...avatarTones[4] },
-];
 
 const card: CSSProperties = {
   background: WHITE,
@@ -178,17 +114,6 @@ function bookStatus(book: Book) {
   const page = book.page_current ?? 0;
   if (!book.page_total) return `p.${page}`;
   return `p.${page} · ${Math.round((page / book.page_total) * 100)}%`;
-}
-
-function Avatar({ initials, size, background, color }: { initials: string; size: number; background: string; color: string }) {
-  return (
-    <span
-      className="flex shrink-0 items-center justify-center"
-      style={{ width: size, height: size, background, color, borderRadius: "50%", fontSize: Math.max(9, size * 0.36), fontWeight: 500 }}
-    >
-      {initials}
-    </span>
-  );
 }
 
 function SectionLabel({ children }: { children: ReactNode }) {
@@ -282,10 +207,9 @@ export default function ProfilePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Latest Last.fm tracks; null when no account is linked (the sample tracks show instead).
+  // Latest Last.fm tracks; null while loading or when no account is linked.
   const [recentTracks, setRecentTracks] = useState<LastfmTrack[] | null>(null);
   const [tab, setTab] = useState("Partages");
-  const [followed, setFollowed] = useState<string[]>([]);
   const [activeInterest, setActiveInterest] = useState<string | null>(null);
 
   useEffect(() => {
@@ -341,7 +265,7 @@ export default function ProfilePage() {
           const tracks = await fetchRecentTracks(music.lastfm_username, 3);
           if (!cancelled && tracks.length > 0) setRecentTracks(tracks);
         } catch {
-          // Last.fm unreachable: keep the sample tracks.
+          // Last.fm unreachable: keep empty state.
         }
       }
     })();
@@ -358,39 +282,56 @@ export default function ProfilePage() {
   const email = session.user.email;
   const displayName = profile?.name ?? email?.split("@")[0] ?? "";
   const username = profile?.username ?? email?.split("@")[0] ?? "";
-  const interests = profile?.interests?.length ? profile.interests : FALLBACK_INTERESTS;
+  const interests = profile?.interests ?? [];
 
-  // Real rows replace the samples as soon as there is at least one.
-  const bookRows =
-    books.length > 0
-      ? books.map((book) => ({ id: book.id, title: book.title, author: book.author ?? "", status: bookStatus(book) }))
-      : sampleBooks;
+  // Compute real stats from loaded data.
+  const computedStats = [
+    { value: String(posts.length), label: "partages", color: TEXT },
+    { value: "0", label: "abonnés", color: TEXT },
+    { value: "0", label: "abonnements", color: TEXT },
+    { value: String(books.length), label: "livres", color: GOLD },
+  ];
 
-  const booksCard = (
-    <section style={card}>
-      <SectionLabel>En cours de lecture</SectionLabel>
-      <ul>
-        {bookRows.map((book, index) => (
-          <li
-            key={book.id}
-            className="flex items-center"
-            style={{ padding: "8px 0", gap: 10, borderBottom: index < bookRows.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
-          >
-            <span className="flex shrink-0 items-center justify-center" style={{ width: 28, height: 38, background: spineColors[index % spineColors.length], borderRadius: 3, fontSize: 11 }}>
-              📖
-            </span>
-            <div className="min-w-0">
-              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{book.title}</p>
-              <p className="truncate" style={{ fontSize: 11, color: DIM }}>{book.author}</p>
-              <p style={{ fontSize: 10, color: book.status === "terminé" ? "#0F6E56" : book.status === "liste" ? DIM : "#8B6914" }}>
-                {book.status}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
+  const bookRows = books.map((book) => ({
+    id: book.id,
+    title: book.title,
+    author: book.author ?? "",
+    status: bookStatus(book),
+  }));
+
+  const booksCard =
+    bookRows.length > 0 ? (
+      <section style={card}>
+        <SectionLabel>En cours de lecture</SectionLabel>
+        <ul>
+          {bookRows.map((book, index) => (
+            <li
+              key={book.id}
+              className="flex items-center"
+              style={{ padding: "8px 0", gap: 10, borderBottom: index < bookRows.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
+            >
+              <span className="flex shrink-0 items-center justify-center" style={{ width: 28, height: 38, background: spineColors[index % spineColors.length], borderRadius: 3, fontSize: 11 }}>
+                📖
+              </span>
+              <div className="min-w-0">
+                <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{book.title}</p>
+                <p className="truncate" style={{ fontSize: 11, color: DIM }}>{book.author}</p>
+                <p style={{ fontSize: 10, color: book.status === "terminé" ? "#0F6E56" : book.status === "liste" ? DIM : "#8B6914" }}>
+                  {book.status}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : (
+      <section style={card}>
+        <SectionLabel>En cours de lecture</SectionLabel>
+        <p style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
+          Aucun livre ajouté pour le moment.
+        </p>
+      </section>
+    );
 
   const musicPosts = posts.filter((post) => post.type === "musique");
 
@@ -399,33 +340,41 @@ export default function ProfilePage() {
         key: `${track.name}-${index}`,
         title: track.name,
         artist: track.nowPlaying ? `${track.artist} · en ce moment` : `${track.artist} · ${playedAgo(track)}`,
-        color: tracks[index % tracks.length].color,
+        color: trackColors[index % trackColors.length],
         nowPlaying: track.nowPlaying,
       }))
-    : tracks.map((track) => ({ key: track.title, title: track.title, artist: track.artist, color: track.color, nowPlaying: false }));
+    : [];
 
-  const musicCard = (
-    <section style={card}>
-      <SectionLabel>{recentTracks ? "Écouté récemment · Last.fm" : "Écouté récemment"}</SectionLabel>
-      <ul>
-        {trackRows.map((track, index) => (
-          <li
-            key={track.key}
-            className="flex items-center"
-            style={{ padding: "8px 0", gap: 10, borderBottom: index < trackRows.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
-          >
-            <span className="flex shrink-0 items-center justify-center" style={{ width: 32, height: 32, background: track.color, borderRadius: 7, fontSize: 12 }}>
-              {track.nowPlaying ? "🔊" : "🎵"}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{track.title}</p>
-              <p className="truncate" style={{ fontSize: 11, color: DIM }}>{track.artist}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
+  const musicCard =
+    trackRows.length > 0 ? (
+      <section style={card}>
+        <SectionLabel>Écouté récemment · Last.fm</SectionLabel>
+        <ul>
+          {trackRows.map((track, index) => (
+            <li
+              key={track.key}
+              className="flex items-center"
+              style={{ padding: "8px 0", gap: 10, borderBottom: index < trackRows.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
+            >
+              <span className="flex shrink-0 items-center justify-center" style={{ width: 32, height: 32, background: track.color, borderRadius: 7, fontSize: 12 }}>
+                {track.nowPlaying ? "🔊" : "🎵"}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{track.title}</p>
+                <p className="truncate" style={{ fontSize: 11, color: DIM }}>{track.artist}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : (
+      <section style={card}>
+        <SectionLabel>Écouté récemment</SectionLabel>
+        <p style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
+          Connecte ton compte Last.fm dans les paramètres pour afficher ta musique ici.
+        </p>
+      </section>
+    );
 
   const postsFeed = (
     <div className="flex flex-col" style={{ gap: 10 }}>
@@ -448,21 +397,7 @@ export default function ProfilePage() {
               </article>
             );
           })
-        : samplePosts.map((post) => (
-            <article key={post.id} style={card}>
-              <PostHeader category={post.category} when={post.when} />
-              <h3 className="mt-3" style={{ fontSize: 15, fontWeight: 500, color: TEXT, lineHeight: 1.4 }}>{post.title}</h3>
-              {post.source && (
-                <p className="mt-2" style={{ fontSize: 11, color: ink(0.35) }}>{post.source}</p>
-              )}
-              {post.quote && (
-                <p className="mt-3 pl-3" style={{ fontFamily: GEORGIA, fontStyle: "italic", fontSize: 13, color: ink(0.6), lineHeight: 1.7, borderLeft: `2px solid ${GOLD}` }}>
-                  {post.quote}
-                </p>
-              )}
-              <Actions likes={post.likes} comments={post.comments} />
-            </article>
-          ))}
+        : <Empty>Tu n&apos;as pas encore partagé de contenu — partage depuis ton dashboard.</Empty>}
     </div>
   );
 
@@ -482,23 +417,22 @@ export default function ProfilePage() {
               {displayName}
             </h1>
             <p className="mt-1 break-words" style={{ fontSize: 12, color: DIM }}>
-              @{username} · {profile?.location ?? FALLBACK_LOCATION}
+              @{username}{profile?.location ? ` · ${profile.location}` : ""}
             </p>
-            <p className="mt-3" style={{ fontSize: 12, color: ink(0.55), lineHeight: 1.6 }}>
-              {profile?.bio ?? FALLBACK_BIO}
-            </p>
+            {profile?.bio && (
+              <p className="mt-3" style={{ fontSize: 12, color: ink(0.55), lineHeight: 1.6 }}>
+                {profile.bio}
+              </p>
+            )}
           </div>
           <button type="button" className="pf-hover mt-3 w-full" style={{ border: `1px solid ${black(0.1)}`, borderRadius: 10, fontSize: 12, padding: 7, color: TEXT }}>
             Modifier le profil
-          </button>
-          <button type="button" className="pf-soft mt-2 w-full" style={{ borderRadius: 10, fontSize: 12, padding: 7, color: TEXT }}>
-            Message
           </button>
 
           <Divider />
 
           <div className="grid grid-cols-2" style={{ gap: 8 }}>
-            {stats.map((stat) => (
+            {computedStats.map((stat) => (
               <div key={stat.label} className="text-center" style={{ background: CREAM, borderRadius: 10, padding: 10 }}>
                 <p style={{ fontFamily: GEORGIA, fontSize: 20, lineHeight: 1.1, color: stat.color }}>{stat.value}</p>
                 <p className="mt-1" style={{ fontSize: 10, color: DIM }}>{stat.label}</p>
@@ -509,20 +443,9 @@ export default function ProfilePage() {
           <Divider />
 
           <SectionLabel>Abonnements</SectionLabel>
-          <ul className="flex flex-col" style={{ gap: 8 }}>
-            {contacts.map((contact) => (
-              <li key={contact.initials} className="flex items-center gap-2" style={{ padding: "5px 0" }}>
-                <Avatar initials={contact.initials} size={28} background={contact.background} color={contact.color} />
-                <div className="min-w-0">
-                  <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{contact.name}</p>
-                  <p className="truncate" style={{ fontSize: 10, color: DIM }}>{contact.tags}</p>
-                </div>
-                {contact.online && (
-                  <span title="En ligne" className="ml-auto shrink-0" style={{ width: 6, height: 6, background: "#1D9E75", borderRadius: "50%" }} />
-                )}
-              </li>
-            ))}
-          </ul>
+          <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
+            Tes abonnements apparaîtront ici quand tu suivras des profils.
+          </p>
         </aside>
 
         {/* Centre column */}
@@ -579,99 +502,46 @@ export default function ProfilePage() {
 
         {/* Right column */}
         <aside className="hidden overflow-y-auto md:block" style={{ background: WHITE, borderLeft: `1px solid ${black(0.07)}`, padding: "20px 16px" }}>
-          <SectionLabel>Profils similaires</SectionLabel>
-          <ul className="flex flex-col" style={{ gap: 8 }}>
-            {similarProfiles.map((person) => {
-              const isFollowed = followed.includes(person.initials);
-              return (
-                <li key={person.initials} className="flex items-center gap-2" style={{ padding: "6px 0", borderBottom: `1px solid ${black(0.05)}` }}>
-                  <Avatar initials={person.initials} size={32} background={person.background} color={person.color} />
-                  <div className="min-w-0">
-                    <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{person.name}</p>
-                    <p className="truncate" style={{ fontSize: 10, color: DIM }}>{person.tags}</p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-pressed={isFollowed}
-                    onClick={() =>
-                      setFollowed(isFollowed ? followed.filter((id) => id !== person.initials) : [...followed, person.initials])
-                    }
-                    className={`ml-auto shrink-0 ${isFollowed ? "" : "pf-hover"}`}
-                    style={{
-                      border: `1px solid ${isFollowed ? INDIGO : black(0.1)}`,
-                      borderRadius: 10,
-                      fontSize: 10,
-                      padding: "3px 10px",
-                      ...(isFollowed ? { background: INDIGO, color: CREAM } : { color: ink(0.6) }),
-                    }}
-                  >
-                    {isFollowed ? "Suivi" : "Suivre"}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-
-          <Divider />
-
           <SectionLabel>Tendances</SectionLabel>
-          <ul>
-            {trends.map((trend, index) => (
-              <li
-                key={trend.topic}
-                className="flex items-center justify-between gap-2"
-                style={{ padding: "8px 0", borderBottom: index < trends.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
-              >
-                <span className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{trend.topic}</span>
-                <span style={{ fontSize: 11, color: GOLD }}>{trend.count}</span>
-              </li>
-            ))}
-          </ul>
+          <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
+            Les sujets populaires dans ton réseau s&apos;afficheront ici.
+          </p>
 
           <Divider />
 
           <SectionLabel>Notifications</SectionLabel>
-          <ul className="flex flex-col" style={{ gap: 8 }}>
-            {notifications.map((notification) => (
-              <li
-                key={notification.text}
-                className="flex items-start gap-2"
-                style={{ padding: 8, background: CREAM, borderRadius: 10, opacity: notification.unread ? 1 : 0.5 }}
-              >
-                <span className="mt-1 shrink-0" style={{ width: 6, height: 6, borderRadius: "50%", background: notification.unread ? INDIGO : "transparent" }} />
-                <div>
-                  <p style={{ fontSize: 11, color: TEXT, lineHeight: 1.4 }}>{notification.text}</p>
-                  <p className="mt-1" style={{ fontSize: 10, color: DIM }}>{notification.time}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
+            Aucune notification pour le moment.
+          </p>
 
-          <Divider />
-
-          <SectionLabel>Centres d&apos;intérêt</SectionLabel>
-          <div className="flex flex-wrap" style={{ gap: 5 }}>
-            {interests.map((interest) => {
-              const isActive = activeInterest === interest;
-              return (
-                <button
-                  key={interest}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => setActiveInterest(isActive ? null : interest)}
-                  className={isActive ? "" : "pf-soft"}
-                  style={{
-                    borderRadius: 20,
-                    fontSize: 11,
-                    padding: "4px 12px",
-                    ...(isActive ? { background: INDIGO, color: CREAM } : { color: ink(0.6) }),
-                  }}
-                >
-                  {interest}
-                </button>
-              );
-            })}
-          </div>
+          {interests.length > 0 && (
+            <>
+              <Divider />
+              <SectionLabel>Centres d&apos;intérêt</SectionLabel>
+              <div className="flex flex-wrap" style={{ gap: 5 }}>
+                {interests.map((interest) => {
+                  const isActive = activeInterest === interest;
+                  return (
+                    <button
+                      key={interest}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => setActiveInterest(isActive ? null : interest)}
+                      className={isActive ? "" : "pf-soft"}
+                      style={{
+                        borderRadius: 20,
+                        fontSize: 11,
+                        padding: "4px 12px",
+                        ...(isActive ? { background: INDIGO, color: CREAM } : { color: ink(0.6) }),
+                      }}
+                    >
+                      {interest}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </aside>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { getInitials } from "@/components/Navbar";
 import { SocialContext } from "@/components/dashboard/SocialActions";
 import { fetchRecentTracks, playedAgo, type LastfmTrack } from "@/lib/lastfm";
 import { changeColor, formatPercent, formatPrice, type Quote } from "@/lib/markets";
-import { avatarTones, discussions, listeningNow, readingNow } from "@/lib/sample-data";
+import { avatarTones } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase";
 
 const INDIGO = "#2A3560";
@@ -129,24 +129,13 @@ function Equaliser() {
 export function NowListeningCard() {
   const listeners = useNetworkListeners();
 
-  // Until someone links Last.fm, the card keeps its sample network.
+  // Nobody has linked Last.fm yet: prompt instead of fake listeners.
   if (listeners !== null && listeners.length === 0) {
     return (
       <article className="db-card" style={card}>
         <Header>🎵 En ce moment dans ton réseau</Header>
-        <ul className="mt-3 flex" style={{ gap: 10 }}>
-          {listeningNow.map((person) => (
-            <li key={person.initials} className="sc-tip" tabIndex={0} aria-label={`${person.name} écoute ${person.track} — ${person.artist}`}>
-              <Circle initials={person.initials} background={person.background} color={person.color} />
-              <Equaliser />
-              <span role="tooltip" className="sc-tip-body">
-                {person.name} écoute {person.track} — {person.artist}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3" style={{ fontSize: 12, color: DIM }}>
-          {listeningNow.length} personnes écoutent de la musique en ce moment
+        <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
+          Connecte ton compte Last.fm pour voir ce que ton réseau écoute en temps réel.
         </p>
         <Link href="/settings" className="sc-link mt-1.5 inline-block" style={{ fontSize: 11 }}>
           Connecter mon Last.fm →
@@ -196,28 +185,8 @@ export function ReadingNowCard() {
   return (
     <article className="db-card" style={card}>
       <Header>📖 Ce que lit ton réseau</Header>
-      <ul className="mt-3 flex items-end" style={{ gap: 6 }}>
-        {readingNow.map((book, index) => (
-          <li key={book.title} className="sc-tip" tabIndex={0} aria-label={`${book.title}, lu par ${book.reader.name}`}>
-            <span
-              className="flex items-center justify-center"
-              style={{ width: 28, height: 38, background: book.spine, borderRadius: 3, fontSize: 11, transform: `rotate(${index % 2 === 0 ? -2 : 1}deg)`, boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}
-            >
-              📖
-            </span>
-            <span role="tooltip" className="sc-tip-body">
-              {book.title} · {book.reader.name}
-            </span>
-          </li>
-        ))}
-      </ul>
       <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
-        {readingNow.slice(0, 3).map((book, index) => (
-          <span key={book.title}>
-            {index > 0 && " · "}
-            <Link href="/profile" className="sc-link">{book.firstName}</Link> lit {book.title}
-          </span>
-        ))}
+        Quand tes abonnés partageront des livres, tu les retrouveras ici.
       </p>
     </article>
   );
@@ -227,23 +196,9 @@ export function DiscussionsCard() {
   return (
     <article className="db-card" style={card}>
       <Header>💬 Dans les discussions</Header>
-      <ul className="mt-3 flex flex-col" style={{ gap: 12 }}>
-        {discussions.map((item) => (
-          <li key={item.excerpt} className="flex gap-2.5">
-            <Circle initials={item.author.initials} background={item.author.background} color={item.author.color} size={28} />
-            <div className="min-w-0">
-              <p style={{ fontSize: 12 }}>
-                <span style={{ fontWeight: 500, color: TEXT }}>{item.author.name}</span> <span style={{ color: DIM }}>a commenté</span>
-              </p>
-              <p className="mt-0.5" style={{ fontSize: 12, color: DIM, fontStyle: "italic", lineHeight: 1.5 }}>« {item.excerpt} »</p>
-              <p className="mt-0.5 truncate" style={{ fontSize: 11, color: ink(0.55) }}>sur {item.article}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <button type="button" className="sc-link mt-3" style={{ fontSize: 11 }}>
-        Rejoindre la discussion →
-      </button>
+      <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
+        Les commentaires sur les articles partagés apparaîtront ici.
+      </p>
     </article>
   );
 }

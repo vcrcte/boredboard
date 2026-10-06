@@ -35,13 +35,12 @@ import {
   type Preferences,
 } from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
-import { avatarTones, contacts, onlineNow, recentActivity, trends } from "@/lib/sample-data";
+import { avatarTones } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
 const SURFACE = "#F0EBE1";
 const INDIGO = "#2A3560";
-const GOLD = "#C4A94A";
 const TEXT = "#1C1A15";
 const WHITE = "#FFFFFF";
 
@@ -146,13 +145,8 @@ const spaces: { icon: string; title: string; detail: string; filter?: string; hr
   { icon: "🎙", title: "Podcasts", detail: "2 favoris", filter: "Podcasts" },
 ];
 
-const suggestions = [
-  { initials: "NL", name: "Nicolas L.", tags: "Histoire · Philo · Lit.", ...avatarTones[5] },
-  { initials: "AV", name: "Amira V.", tags: "Science · Tech · Podcast", ...avatarTones[0] },
-  { initials: "PG", name: "Paul G.", tags: "Géopo · Art · Cinéma", ...avatarTones[2] },
-];
 
-const newsletterTags = ["Taïwan", "Stoïcisme", "Floating Points", "Sapiens"];
+const newsletterTags = ["Tes articles", "Tendances", "Musique", "Livres"];
 
 const card: CSSProperties = {
   background: WHITE,
@@ -258,231 +252,31 @@ function CardHeader({
   );
 }
 
-function ActionButton({
-  children,
-  active = false,
-  activeStyle,
-  onClick,
-  className = "",
-  label,
-}: {
-  children: ReactNode;
-  active?: boolean;
-  activeStyle?: CSSProperties;
-  onClick: () => void;
-  className?: string;
-  label?: string;
-}) {
+
+function WelcomeCard({ onNewPost }: { onNewPost: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      aria-label={label}
-      className={`flex items-center ${active ? "" : "db-action"} ${className}`}
-      style={{
-        padding: "5px 10px",
-        borderRadius: 8,
-        fontSize: 12,
-        gap: 5,
-        color: ink(0.55),
-        ...(active ? (activeStyle ?? { color: INDIGO, background: "rgba(42,53,96,0.07)" }) : {}),
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-const sampleComments = [
-  {
-    initials: "MK",
-    name: "Marc K.",
-    text: "Le parallèle avec 1996 est frappant — même si les rapports de force ont radicalement changé.",
-    ...avatarTones[1],
-  },
-];
-
-function ArticleCard() {
-  return (
-    <article className="db-card" style={card}>
-      <CardHeader
-        avatar={<Avatar initials="SA" size={30} {...avatarTones[0]} />}
-        name="Sophie A."
-        verb="partage un article"
-        pill={<Pill tone="green">Géopolitique</Pill>}
-        time="14 min"
-      />
-      <h3 className="mt-3" style={{ fontSize: 15, fontWeight: 500, color: TEXT, lineHeight: 1.4 }}>
-        Détroit de Taïwan : derrière la manœuvre navale, une nouvelle grammaire de la tension
-      </h3>
-      <p className="mt-2" style={{ fontSize: 12, color: ink(0.55), lineHeight: 1.6 }}>
-        La présence renforcée de la 7e flotte américaine relance un débat que Pékin cherche à cadrer à sa façon.
-      </p>
-      <p className="mt-2 flex items-center" style={{ fontSize: 11, color: ink(0.35), gap: 4 }}>
-        <span aria-hidden>↗</span>
-        Le Monde · lecture 5 min
-      </p>
-
-      <Actions likes={47} comments={11} extra="↗ Partager" save="🔖 Sauvegarder" initialComments={sampleComments} />
-    </article>
-  );
-}
-
-function MusicCard() {
-  const [playing, setPlaying] = useState(false);
-  const [added, setAdded] = useState(false);
-
-  return (
-    <article className="db-card" style={card}>
-      <CardHeader
-        avatar={<Avatar initials="LR" size={30} {...avatarTones[2]} />}
-        name="Léa R."
-        verb="écoute"
-        pill={<Pill tone="violet">Musique</Pill>}
-        time="38 min"
-      />
-      <div className="mt-3 flex items-center gap-3">
-        <span className="flex shrink-0 items-center justify-center" style={{ width: 52, height: 52, background: "#EEEDFE", borderRadius: 10, fontSize: 20, color: "#534AB7" }}>
-          🎵
-        </span>
-        <div className="min-w-0">
-          <p className="truncate" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>Nespole</p>
-          <p className="truncate" style={{ fontSize: 12, color: DIM }}>Floating Points · Elaenia</p>
-        </div>
-        <div className="ml-auto flex shrink-0 items-center" style={{ gap: 12, fontSize: 16, color: ink(0.5) }}>
-          <button type="button" aria-label="Morceau précédent">⏮</button>
-          <button type="button" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause" : "Lecture"} style={{ fontSize: 20, color: TEXT }}>
-            {playing ? "⏸" : "▶"}
-          </button>
-          <button type="button" aria-label="Morceau suivant">⏭</button>
-        </div>
-      </div>
-      <div className="mt-3" style={{ height: 3, background: black(0.07), borderRadius: 2 }}>
-        <div style={{ height: 3, width: "42%", background: INDIGO, borderRadius: 2 }} />
-      </div>
-      <div className="mt-1 flex justify-between" style={{ fontSize: 10, color: DIM }}>
-        <span>1:58</span>
-        <span>3:12</span>
-      </div>
-      <div className="flex flex-wrap items-end" style={{ gap: 4 }}>
-        <Actions likes={23} comments={5} save={null} />
-        <ActionButton active={added} onClick={() => setAdded(!added)}>
-          {added ? "✓ Dans ma liste" : "+ Ajouter à ma liste"}
-        </ActionButton>
-      </div>
-    </article>
-  );
-}
-
-function DiscoveryCard() {
-  return (
-    <article className="db-card" style={card}>
-      <div className="flex items-center gap-2">
-        <span style={{ fontSize: 10, color: "#534AB7", background: "rgba(83,74,183,0.07)", padding: "3px 10px", borderRadius: 10 }}>
-          ✦ Découverte pour toi
-        </span>
-        <span className="ml-auto">
-          <Pill tone="indigo">Philosophie</Pill>
-        </span>
-      </div>
-      <h3 className="mt-3" style={{ fontSize: 15, fontWeight: 500, color: TEXT, lineHeight: 1.4 }}>
-        Le stoïcisme comme antidote au monde hyperconnecté
-      </h3>
-      <p className="mt-1" style={{ fontSize: 12, color: ink(0.45), fontStyle: "italic" }}>
-        Parce que tu as lu des articles sur Nietzsche cette semaine, BoredBoard te recommande...
-      </p>
-      <p className="mt-2" style={{ fontSize: 12, color: ink(0.55), lineHeight: 1.6 }}>
-        Comment les Méditations de Marc Aurèle résonnent avec nos crises d&apos;attention modernes.
-      </p>
-      <p className="mt-2" style={{ fontSize: 11, color: DIM }}>Philosophie Magazine · lecture 8 min</p>
-      <Actions likes={134} comments={31} save="🔖 Sauvegarder" />
-    </article>
-  );
-}
-
-function BookCard() {
-  const [added, setAdded] = useState(false);
-
-  return (
-    <article className="db-card" style={card}>
-      <CardHeader
-        avatar={<Avatar initials="JD" size={30} {...avatarTones[3]} />}
-        name="Jules D."
-        verb="lit"
-        pill={<Pill tone="olive">Livres</Pill>}
-        time="1h"
-      />
-      <p className="mt-3 pl-3" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: "italic", fontSize: 13, color: ink(0.6), lineHeight: 1.7, borderLeft: `2px solid ${GOLD}` }}>
-        Les grands récits fictifs donnent à l&apos;humanité sa cohésion — c&apos;est peut-être ça, le vrai secret de notre domination.
-      </p>
-      <div className="mt-3 flex items-center" style={{ background: CREAM, borderRadius: 10, padding: 10, gap: 10 }}>
-        <span className="flex shrink-0 items-center justify-center" style={{ width: 30, height: 42, background: "#EEEDFE", borderRadius: 3, fontSize: 12 }}>
-          📖
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>Sapiens</p>
-          <p className="truncate" style={{ fontSize: 11, color: DIM }}>Yuval Noah Harari</p>
-          <div className="mt-1 flex items-center" style={{ gap: 6, fontSize: 10, color: DIM }}>
-            <span>p. 214</span>
-            <div className="flex-1" style={{ height: 2, maxWidth: 120, background: black(0.07), borderRadius: 2 }}>
-              <div style={{ height: 2, width: "48%", background: GOLD, borderRadius: 2 }} />
-            </div>
-            <span>48%</span>
-          </div>
-        </div>
+    <article style={card}>
+      <div className="text-center" style={{ padding: "24px 16px" }}>
+        <p style={{ fontSize: 28 }}>👋</p>
+        <h3 className="mt-2" style={{ fontSize: 16, fontWeight: 600, color: TEXT }}>
+          Bienvenue sur BoredBoard
+        </h3>
+        <p className="mx-auto mt-2" style={{ fontSize: 13, color: ink(0.5), lineHeight: 1.6, maxWidth: 340 }}>
+          Ton feed est vide pour l&apos;instant. Partage un article, une musique ou une réflexion pour commencer.
+        </p>
         <button
           type="button"
-          onClick={() => setAdded(!added)}
-          aria-pressed={added}
-          className="db-action ml-auto shrink-0"
-          style={{ border: `1px solid ${black(0.1)}`, borderRadius: 8, fontSize: 11, padding: "4px 10px", color: ink(0.6) }}
+          onClick={onNewPost}
+          className="db-fab mt-4 inline-flex items-center"
+          style={{ color: CREAM, fontSize: 13, fontWeight: 500, padding: "10px 24px", borderRadius: 20, gap: 6 }}
         >
-          {added ? "✓ Ajouté" : "+ Ajouter"}
+          <span aria-hidden>+</span> Créer mon premier post
         </button>
       </div>
-      <Actions likes={61} comments={9} />
     </article>
   );
 }
 
-function PodcastCard() {
-  const [playing, setPlaying] = useState(false);
-
-  return (
-    <article className="db-card" style={card}>
-      <CardHeader
-        avatar={<Avatar initials="NB" size={30} {...avatarTones[4]} />}
-        name="Nina B."
-        verb="écoute un podcast"
-        pill={<Pill tone="rose">Podcast</Pill>}
-        time="2h"
-      />
-      <p className="mt-2" style={{ fontSize: 12, color: ink(0.55), fontStyle: "italic", lineHeight: 1.6 }}>
-        Un épisode vertigineux sur la géopolitique de l&apos;eau — la ressource qui va redéfinir les alliances du XXIe siècle.
-      </p>
-      <div className="mt-3 flex items-center" style={{ background: CREAM, borderRadius: 10, padding: 10, gap: 10 }}>
-        <span className="flex shrink-0 items-center justify-center" style={{ width: 40, height: 40, background: "#FAECE7", borderRadius: 8, fontSize: 16 }}>
-          🎙
-        </span>
-        <div className="min-w-0">
-          <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>L&apos;eau, nouvelle arme géopolitique</p>
-          <p className="truncate" style={{ fontSize: 10, color: DIM }}>Méta de Choc · ep. 52 · 48 min</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setPlaying(!playing)}
-          aria-label={playing ? "Pause" : "Lecture"}
-          className="db-play ml-auto shrink-0"
-          style={{ fontSize: 16, ...(playing ? { color: TEXT } : {}) }}
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
-      </div>
-      <Actions likes={38} comments={7} />
-    </article>
-  );
-}
 
 /** What the Apple Shortcut saves with a post (app/api/shortcuts/music/route.ts). */
 type ShortcutTrack = {
@@ -959,7 +753,6 @@ export default function Dashboard() {
   const [filter, setFilter] = useState("Tout");
   const [modalOpen, setModalOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [followed, setFollowed] = useState<string[]>([]);
   // null while the feed is loading.
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
@@ -969,15 +762,17 @@ export default function Dashboard() {
   const [customizerOpen, setCustomizerOpen] = useState(false);
   // Phones: the left sidebar opens as a drawer from the hamburger button.
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Phones: the right sidebar opens as a bottom sheet from the utility button.
+  const [utilityOpen, setUtilityOpen] = useState(false);
 
   useEffect(() => {
-    if (!sidebarOpen) return;
+    if (!sidebarOpen && !utilityOpen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSidebarOpen(false);
+      if (event.key === "Escape") { setSidebarOpen(false); setUtilityOpen(false); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sidebarOpen]);
+  }, [sidebarOpen, utilityOpen]);
 
   // The local copy shows instantly; the one saved on the profile wins once read.
   useEffect(() => {
@@ -1108,19 +903,15 @@ export default function Dashboard() {
       return !moduleId || on(moduleId);
     })
     .map((post) => ({ key: post.id, tags: postTags(post), node: <PostCard post={post} /> }));
-  if (postItems.length === 0 && on("actualites")) {
-    // The sample article only stands in while there is no real post yet.
-    postItems.push({ key: "article", tags: ["Actualités"], node: <ArticleCard /> });
+  if (postItems.length === 0) {
+    postItems.push({ key: "welcome", tags: [], node: <WelcomeCard onNewPost={() => setModalOpen(true)} /> });
   }
 
-  // 2. What the network is doing right now, then the sample shares.
+  // 2. What the network is doing right now.
   const socialItems = ([
     on("musique") && { key: "listening", tags: ["Musique"], node: <NowListeningCard /> },
     on("livres") && { key: "reading", tags: ["Livres"], node: <ReadingNowCard /> },
     on("reactions") && { key: "discussions", tags: [], node: <DiscussionsCard /> },
-    on("musique") && { key: "music", tags: ["Musique"], node: <MusicCard /> },
-    on("livres") && { key: "book", tags: ["Livres"], node: <BookCard /> },
-    on("podcasts") && { key: "podcast", tags: ["Podcasts"], node: <PodcastCard /> },
   ] as (FeedItem | false)[]).filter((item): item is FeedItem => Boolean(item));
 
   // 3. Articles matching the themes, and the markets flash.
@@ -1142,10 +933,8 @@ export default function Dashboard() {
     }
   }
 
-  // 4. Recommendations.
-  const discoveryItems: FeedItem[] = on("decouvertes")
-    ? [{ key: "discovery", tags: ["Découvertes", "Philo"], node: <DiscoveryCard /> }]
-    : [];
+  // 4. Recommendations (fed by the news API; the static placeholder has been removed).
+  const discoveryItems: FeedItem[] = [];
 
   const interleave = (first: FeedItem[], second: FeedItem[]) =>
     Array.from({ length: Math.max(first.length, second.length) }, (_, index) => [first[index], second[index]])
@@ -1245,38 +1034,16 @@ export default function Dashboard() {
           <Divider />
 
           <SectionLabel>Abonnements</SectionLabel>
-          <ul className="flex flex-col" style={{ gap: 8 }}>
-            {contacts.map((contact) => (
-              <li key={contact.initials} className="flex items-center gap-2" style={{ padding: "5px 0" }}>
-                <Avatar initials={contact.initials} size={28} background={contact.background} color={contact.color} />
-                <div className="min-w-0">
-                  <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{contact.name}</p>
-                  <p className="truncate" style={{ fontSize: 10, color: DIM }}>{contact.tags}</p>
-                </div>
-                {contact.online && (
-                  <span title="En ligne" className="ml-auto shrink-0" style={{ width: 6, height: 6, background: "#1D9E75", borderRadius: "50%" }} />
-                )}
-              </li>
-            ))}
-          </ul>
+          <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
+            Tes abonnements apparaîtront ici quand tu suivras des profils.
+          </p>
 
           <Divider />
 
           <SectionLabel>Qui est en ligne</SectionLabel>
-          <ul className="flex flex-col" style={{ gap: 8 }}>
-            {onlineNow.map((person) => (
-              <li key={person.initials} className="flex items-center gap-2">
-                <span className="relative shrink-0">
-                  <Avatar initials={person.initials} size={28} background={person.background} color={person.color} />
-                  <span className="absolute" style={{ right: -1, bottom: -1, width: 8, height: 8, background: "#1D9E75", borderRadius: "50%", border: `2px solid ${WHITE}` }} />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{person.name}</p>
-                  <p className="truncate" style={{ fontSize: 11, color: DIM }}>{person.activity}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
+            Aucun abonné en ligne pour le moment.
+          </p>
 
           <Divider />
 
@@ -1399,6 +1166,16 @@ export default function Dashboard() {
             )}
           </main>
 
+          {/* Mobile: utility button (left of FAB) */}
+          <button
+            type="button"
+            onClick={() => setUtilityOpen(true)}
+            aria-label="Ouvrir le panneau utilitaire"
+            className="db-hover absolute bottom-6 right-[72px] z-20 flex items-center justify-center md:hidden"
+            style={{ background: WHITE, width: 40, height: 40, borderRadius: "50%", fontSize: 16, border: `1px solid ${black(0.1)}`, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}
+          >
+            ⚡
+          </button>
           <button
             type="button"
             onClick={() => setModalOpen(true)}
@@ -1411,79 +1188,103 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Right sidebar */}
+        {/* Right sidebar — utility panel */}
         <aside className="hidden overflow-y-auto md:block" style={{ background: WHITE, borderLeft: `1px solid ${black(0.07)}`, padding: "20px 16px" }}>
-          <SectionLabel>Activité récente</SectionLabel>
-          <ul>
-            {recentActivity.map((item, index) => (
-              <li
-                key={item.text}
-                className="flex items-start gap-2"
-                style={{ padding: "7px 0", borderBottom: index < recentActivity.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
-              >
-                <span aria-hidden className="shrink-0" style={{ fontSize: 14, lineHeight: 1.2 }}>{item.icon}</span>
-                <p className="min-w-0" style={{ fontSize: 11, color: TEXT, lineHeight: 1.4 }}>{item.text}</p>
-                <span className="ml-auto shrink-0" style={{ fontSize: 10, color: DIM }}>{item.time}</span>
-              </li>
+          {/* Quick stats */}
+          <SectionLabel>Mon activité</SectionLabel>
+          <div className="grid grid-cols-2" style={{ gap: 6 }}>
+            {[
+              { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
+              { icon: "🎵", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
+              { icon: "📖", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
+              { icon: "💬", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center" style={{ background: CREAM, borderRadius: 10, padding: "10px 8px" }}>
+                <p style={{ fontSize: 14 }} aria-hidden>{stat.icon}</p>
+                <p style={{ fontSize: 16, fontWeight: 600, color: TEXT, lineHeight: 1.2 }}>{stat.value}</p>
+                <p style={{ fontSize: 10, color: DIM }}>{stat.label}</p>
+              </div>
             ))}
-          </ul>
+          </div>
 
           <Divider />
 
-          <SectionLabel>Tendances</SectionLabel>
-          <ul>
-            {trends.map((trend, index) => (
-              <li
-                key={trend.topic}
-                className="flex items-center justify-between gap-2"
-                style={{ padding: "8px 0", borderBottom: index < trends.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
+          {/* Quick actions */}
+          <SectionLabel>Raccourcis</SectionLabel>
+          <div className="flex flex-col" style={{ gap: 4 }}>
+            {[
+              { icon: "➕", label: "Nouveau post", action: () => setModalOpen(true) },
+              { icon: "⚙️", label: "Personnaliser le feed", action: () => setCustomizerOpen(true) },
+            ].map((shortcut) => (
+              <button
+                key={shortcut.label}
+                type="button"
+                onClick={shortcut.action}
+                className="db-hover flex items-center text-left"
+                style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
               >
-                <span className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{trend.topic}</span>
-                <span style={{ fontSize: 11, color: GOLD }}>{trend.count}</span>
-              </li>
+                <span aria-hidden style={{ fontSize: 14 }}>{shortcut.icon}</span>
+                {shortcut.label}
+              </button>
             ))}
-          </ul>
-
-
-          <Divider />
-
-          <SectionLabel>Découvrir des profils</SectionLabel>
-          <ul className="flex flex-col" style={{ gap: 8 }}>
-            {suggestions.map((person) => {
-              const isFollowed = followed.includes(person.initials);
-              return (
-                <li key={person.initials} className="flex items-center gap-2" style={{ padding: "6px 0", borderBottom: `1px solid ${black(0.05)}` }}>
-                  <Avatar initials={person.initials} size={32} background={person.background} color={person.color} />
-                  <div className="min-w-0">
-                    <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{person.name}</p>
-                    <p className="truncate" style={{ fontSize: 10, color: DIM }}>{person.tags}</p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-pressed={isFollowed}
-                    onClick={() =>
-                      setFollowed(isFollowed ? followed.filter((id) => id !== person.initials) : [...followed, person.initials])
-                    }
-                    className={`ml-auto shrink-0 ${isFollowed ? "" : "db-hover"}`}
-                    style={{
-                      border: `1px solid ${black(0.1)}`,
-                      borderRadius: 10,
-                      fontSize: 10,
-                      padding: "3px 10px",
-                      ...(isFollowed
-                        ? { background: INDIGO, color: CREAM, borderColor: INDIGO }
-                        : { color: ink(0.6) }),
-                    }}
-                  >
-                    {isFollowed ? "Suivi" : "Suivre"}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+            <Link
+              href="/profile"
+              className="db-hover flex items-center"
+              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+            >
+              <span aria-hidden style={{ fontSize: 14 }}>👤</span>
+              Mon profil
+            </Link>
+            <Link
+              href="/settings"
+              className="db-hover flex items-center"
+              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+            >
+              <span aria-hidden style={{ fontSize: 14 }}>🔧</span>
+              Paramètres
+            </Link>
+            <Link
+              href="/actualites"
+              className="db-hover flex items-center"
+              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+            >
+              <span aria-hidden style={{ fontSize: 14 }}>📰</span>
+              Toutes les actualités
+            </Link>
+          </div>
 
           <Divider />
 
+          {/* Themes — visual indicator of active interests */}
+          <SectionLabel>Mes thèmes actifs</SectionLabel>
+          <div className="flex flex-wrap" style={{ gap: 5 }}>
+            {(preferences.themes.length > 0 ? preferences.themes : ["Aucun thème sélectionné"]).map((theme) => (
+              <span
+                key={theme}
+                style={{
+                  background: preferences.themes.length > 0 ? "rgba(42,53,96,0.07)" : "transparent",
+                  color: preferences.themes.length > 0 ? INDIGO : DIM,
+                  fontSize: 11,
+                  borderRadius: 20,
+                  padding: "4px 12px",
+                }}
+              >
+                {theme}
+              </span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setCustomizerOpen(true)}
+            className="db-hover mt-2 w-full"
+            style={{ border: `1px solid ${black(0.08)}`, borderRadius: 8, fontSize: 11, padding: 6, color: ink(0.6) }}
+          >
+            Modifier mes thèmes
+          </button>
+
+          <Divider />
+
+          {/* Newsletter */}
           <SectionLabel>Ta newsletter · demain</SectionLabel>
           <div style={{ background: CREAM, borderRadius: 12, padding: 12 }}>
             <p className="mb-1" style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>Curio Daily — demain matin</p>
@@ -1497,8 +1298,8 @@ export default function Dashboard() {
             </div>
             {previewOpen && (
               <p className="mt-2" style={{ fontSize: 11, color: ink(0.6), lineHeight: 1.5 }}>
-                Au sommaire : Taïwan et la grammaire de la tension, le stoïcisme
-                face à l&apos;hyperconnexion, Floating Points, et où tu en es dans Sapiens.
+                Au sommaire : un résumé de tes articles partagés, les tendances de ta communauté,
+                et ce que ton réseau écoute et lit en ce moment.
               </p>
             )}
             <button
@@ -1526,6 +1327,96 @@ export default function Dashboard() {
       )}
       {customizerOpen && (
         <Customizer initial={preferences} onClose={() => setCustomizerOpen(false)} onSave={handleSavePreferences} />
+      )}
+
+      {/* Mobile utility bottom sheet */}
+      {utilityOpen && (
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-40 md:hidden"
+            style={{ background: "rgba(28,26,21,0.35)" }}
+            onClick={() => setUtilityOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Panneau utilitaire"
+            className="fixed inset-x-0 bottom-0 z-50 md:hidden"
+            style={{ background: WHITE, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "75vh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.12)" }}
+          >
+            <div className="flex items-center justify-between" style={{ padding: "16px 20px 8px", borderBottom: `1px solid ${black(0.06)}` }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>⚡ Utilitaires</span>
+              <button type="button" onClick={() => setUtilityOpen(false)} aria-label="Fermer" className="db-play" style={{ fontSize: 16 }}>✕</button>
+            </div>
+            <div style={{ padding: "12px 20px 24px" }}>
+              {/* Stats grid */}
+              <div className="grid grid-cols-4" style={{ gap: 8, marginBottom: 16 }}>
+                {[
+                  { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
+                  { icon: "🎵", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
+                  { icon: "📖", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
+                  { icon: "💬", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
+                ].map((stat) => (
+                  <div key={stat.label} className="text-center" style={{ background: CREAM, borderRadius: 10, padding: "10px 4px" }}>
+                    <p style={{ fontSize: 14 }} aria-hidden>{stat.icon}</p>
+                    <p style={{ fontSize: 16, fontWeight: 600, color: TEXT, lineHeight: 1.2 }}>{stat.value}</p>
+                    <p style={{ fontSize: 9, color: DIM }}>{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Quick actions */}
+              <div className="grid grid-cols-2" style={{ gap: 8 }}>
+                {[
+                  { icon: "➕", label: "Nouveau post", action: () => { setUtilityOpen(false); setModalOpen(true); } },
+                  { icon: "⚙️", label: "Personnaliser", action: () => { setUtilityOpen(false); setCustomizerOpen(true); } },
+                ].map((shortcut) => (
+                  <button
+                    key={shortcut.label}
+                    type="button"
+                    onClick={shortcut.action}
+                    className="db-hover flex items-center justify-center"
+                    style={{ background: CREAM, padding: "12px 10px", borderRadius: 12, fontSize: 12, gap: 6, color: ink(0.6) }}
+                  >
+                    <span aria-hidden>{shortcut.icon}</span>
+                    {shortcut.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 grid grid-cols-3" style={{ gap: 8 }}>
+                {[
+                  { icon: "👤", label: "Profil", href: "/profile" },
+                  { icon: "🔧", label: "Paramètres", href: "/settings" },
+                  { icon: "📰", label: "Actualités", href: "/actualites" },
+                ].map((link) => (
+                  <Link
+                    key={link.label}
+                    href={link.href}
+                    onClick={() => setUtilityOpen(false)}
+                    className="db-hover flex flex-col items-center"
+                    style={{ background: CREAM, padding: "12px 8px", borderRadius: 12, fontSize: 11, gap: 4, color: ink(0.6) }}
+                  >
+                    <span aria-hidden style={{ fontSize: 16 }}>{link.icon}</span>
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+
+              {/* Active themes */}
+              {preferences.themes.length > 0 && (
+                <div className="mt-4">
+                  <p style={{ fontSize: 9, color: ink(0.35), letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 400, marginBottom: 8 }}>Mes thèmes</p>
+                  <div className="flex flex-wrap" style={{ gap: 5 }}>
+                    {preferences.themes.map((theme) => (
+                      <span key={theme} style={{ background: "rgba(42,53,96,0.07)", color: INDIGO, fontSize: 11, borderRadius: 20, padding: "4px 12px" }}>{theme}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
     </SocialContext.Provider>

@@ -3,7 +3,6 @@
 import { createContext, useContext, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getInitials } from "@/components/Navbar";
-import { contacts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -87,17 +86,27 @@ function Button({
   );
 }
 
-// "@Sophie A." etc.: the contact names, longest first so "@Marc K." wins over a shorter prefix.
-const MENTION = new RegExp(
-  `(@(?:${contacts
-    .map((contact) => contact.name)
-    .sort((a, b) => b.length - a.length)
-    .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|")}))`,
-);
+type Contact = { name: string; initials: string; background: string; color: string };
+
+// People who can be @mentioned. Empty until follows are loaded from Supabase:
+// the fake contacts that filled it are gone.
+const contacts: Contact[] = [];
+
+// "@Marc K." etc.: the contact names, longest first so "@Marc K." wins over a
+// shorter prefix. null while there is nobody to mention.
+const MENTION = contacts.length
+  ? new RegExp(
+      `(@(?:${contacts
+        .map((contact) => contact.name)
+        .sort((a, b) => b.length - a.length)
+        .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("|")}))`,
+    )
+  : null;
 
 /** Highlights @mentions of known contacts in a comment. */
 function withMentions(text: string) {
+  if (!MENTION) return text;
   return text.split(MENTION).map((part, index) =>
     index % 2 === 1 ? (
       <span key={index} style={{ color: INDIGO, fontWeight: 500 }}>{part}</span>
