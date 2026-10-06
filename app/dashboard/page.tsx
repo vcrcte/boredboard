@@ -1416,7 +1416,7 @@ export default function Dashboard() {
 
         {/* Feed */}
         <div className="relative min-h-0 min-w-0">
-          <main className="mx-auto flex h-full w-full flex-col overflow-y-auto px-3 md:px-5" style={{ background: CREAM, paddingBottom: 96, gap: 12, maxWidth: 680 }}>
+          <main className="mx-auto flex h-full w-full flex-col overflow-y-auto px-3 md:px-5" style={{ background: CREAM, paddingBottom: 96, gap: 12, maxWidth: 740 }}>
             <div className="sticky top-0 z-10 mb-2 shrink-0" style={{ background: CREAM, paddingTop: 20, paddingBottom: 12, borderBottom: `1px solid ${black(0.06)}` }}>
               <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 6 }}>
                 <button
