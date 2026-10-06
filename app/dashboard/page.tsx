@@ -37,7 +37,7 @@ import {
 import { ensureProfile } from "@/lib/profile";
 import { avatarTones } from "@/lib/sample-data";
 import { getUserSubscriptions, NEWSLETTER_SOURCES } from "@/lib/newsletter";
-import { getUserPodcastSubscriptions } from "@/lib/podcasts";
+import { getUserPodcastSubscriptions, PODCAST_SOURCES } from "@/lib/podcasts";
 import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
@@ -421,7 +421,7 @@ function SuggestedProfiles() {
   ];
   return (
     <div className="flex flex-col" style={{ gap: 8 }}>
-      {suggestions.map((s) => {
+      {suggestions.map((s, i) => {
         const t = avatarTones[(s.name.charCodeAt(0) + s.name.charCodeAt(1)) % avatarTones.length];
         return (
           <div key={s.username} className="flex items-center gap-3" style={{ padding: "6px 0" }}>
