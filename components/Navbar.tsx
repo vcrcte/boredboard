@@ -23,11 +23,35 @@ const menuLinks = [
   { label: "Paramètres", href: "/settings" },
 ];
 
+function BoardIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 80 80"
+      width={size}
+      height={size}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect x="4" y="4" width="72" height="72" rx="8" stroke="currentColor" strokeWidth="3.5" />
+      <rect x="14" y="14" width="20" height="20" rx="3" fill="#C4A94A" />
+      <rect x="40" y="14" width="26" height="8" rx="2" fill="currentColor" opacity="0.3" />
+      <rect x="40" y="28" width="18" height="6" rx="2" fill="currentColor" opacity="0.15" />
+      <rect x="14" y="42" width="52" height="8" rx="2" fill="currentColor" opacity="0.2" />
+      <rect x="14" y="56" width="38" height="8" rx="2" fill="#C4A94A" opacity="0.4" />
+      <circle cx="62" cy="60" r="6" fill="currentColor" opacity="0.15" />
+    </svg>
+  );
+}
+
 export function Logo({ className = "text-[18px]" }: { className?: string }) {
   return (
-    <span className={`font-serif ${className} leading-none`}>
-      <span className="text-[#2A3560]">Bored</span>
-      <span className="text-[#C4A94A]">Board</span>
+    <span className={`flex items-center gap-2 font-serif ${className} leading-none text-[#2A3560]`}>
+      <BoardIcon size={className.includes("text-[2") ? 28 : 22} />
+      <span>
+        <span className="text-[#2A3560]">Bored</span>
+        <span className="text-[#C4A94A]">Board</span>
+      </span>
     </span>
   );
 }
