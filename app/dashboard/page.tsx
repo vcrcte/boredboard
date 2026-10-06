@@ -37,6 +37,7 @@ import {
 import { ensureProfile } from "@/lib/profile";
 import { avatarTones } from "@/lib/sample-data";
 import { getUserSubscriptions, NEWSLETTER_SOURCES } from "@/lib/newsletter";
+import { getUserPodcastSubscriptions, PODCAST_SOURCES } from "@/lib/podcasts";
 import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
@@ -156,7 +157,7 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
 const spaces: { icon: string; title: string; detail: string; filter?: string; href?: string }[] = [
   { icon: "🎵", title: "Musique", detail: "4 titres", filter: "Musique" },
   { icon: "📖", title: "Livres", detail: "en cours", href: "/livres" },
-  { icon: "🎙", title: "Podcasts", detail: "2 favoris", filter: "Podcasts" },
+  { icon: "🎙", title: "Podcasts", detail: "favoris", href: "/podcasts" },
 ];
 
 
@@ -844,6 +845,8 @@ export default function Dashboard() {
   const [following, setFollowing] = useState<PublicProfile[]>([]);
   // Newsletter articles from subscribed RSS feeds.
   const [nlArticles, setNlArticles] = useState<NewsletterArticle[]>([]);
+  // Podcast subscription count for the sidebar.
+  const [podcastSubCount, setPodcastSubCount] = useState(0);
 
   useEffect(() => {
     if (!sidebarOpen && !utilityOpen) return;
@@ -973,6 +976,14 @@ export default function Dashboard() {
         if (!cancelled) setNlArticles(articles ?? []);
       } catch { /* silently skip */ }
     })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  // Load podcast subscription count for sidebar.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    getUserPodcastSubscriptions(userId).then((list) => { if (!cancelled) setPodcastSubCount(list.length); });
     return () => { cancelled = true; };
   }, [userId]);
 
@@ -1384,6 +1395,14 @@ export default function Dashboard() {
               Newsletters
             </Link>
             <Link
+              href="/podcasts"
+              className="db-hover flex items-center"
+              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+            >
+              <span aria-hidden style={{ fontSize: 14 }}>🎙</span>
+              Podcasts{podcastSubCount > 0 ? ` (${podcastSubCount})` : ""}
+            </Link>
+            <Link
               href="/explore"
               className="db-hover flex items-center"
               style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
@@ -1456,6 +1475,24 @@ export default function Dashboard() {
               <p className="mb-2" style={{ fontSize: 11, color: DIM }}>Découvre et abonne-toi à des newsletters culturelles françaises.</p>
               <div className="flex items-center justify-between">
                 <span style={{ fontSize: 11, color: INDIGO, fontWeight: 500 }}>Gérer mes abonnements →</span>
+              </div>
+            </div>
+          </Link>
+
+          <Divider />
+
+          {/* Podcasts */}
+          <SectionLabel>Tes podcasts</SectionLabel>
+          <Link href="/podcasts" style={{ textDecoration: "none" }}>
+            <div className="db-hover" style={{ background: CREAM, borderRadius: 12, padding: 12, cursor: "pointer" }}>
+              <p className="mb-1" style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>🎙 Podcasts culturels</p>
+              <p className="mb-2" style={{ fontSize: 11, color: DIM }}>
+                {podcastSubCount > 0
+                  ? `${podcastSubCount} podcast${podcastSubCount > 1 ? "s" : ""} suivi${podcastSubCount > 1 ? "s" : ""}`
+                  : "Découvre les meilleurs podcasts culturels français."}
+              </p>
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 11, color: INDIGO, fontWeight: 500 }}>Gérer mes podcasts →</span>
               </div>
             </div>
           </Link>
