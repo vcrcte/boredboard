@@ -50,9 +50,11 @@ const filters: { label: string; params: NewsParams; slug?: string; bourse?: bool
   { label: "Économie", params: { category: "business" } },
   { label: "Géopolitique", params: { q: "géopolitique diplomatie" } },
   { label: "Culture", params: { category: "entertainment" } },
-  // The markets dashboard, formerly its own /marches page.
-  { label: "Bourse", params: {}, slug: "bourse", bourse: true },
+  { label: "Sport", params: { category: "sports" } },
 ];
+
+// The markets dashboard (formerly its own /marches page), opened from the button next to the subtitle.
+const BOURSE: (typeof filters)[number] = { label: "Bourse", params: {}, slug: "bourse", bourse: true };
 
 // The headline plus seven full rows; everything after goes to "En bref".
 const FULL_ARTICLES = 8;
@@ -240,7 +242,7 @@ export default function Actualites() {
   // ?rubrique=bourse opens the markets section (old /marches links redirect there).
   useEffect(() => {
     const slug = new URLSearchParams(window.location.search).get("rubrique");
-    const match = filters.find((filter) => filter.slug && filter.slug === slug);
+    const match = [...filters, BOURSE].find((filter) => filter.slug && filter.slug === slug);
     if (match) setActive(match);
   }, []);
 
@@ -286,9 +288,29 @@ export default function Actualites() {
             </h1>
             <p style={{ fontSize: 13, color: ink(0.35) }}>{today}</p>
           </div>
-          <p className="mt-2" style={{ fontSize: 13, color: DIM }}>
-            Sources sélectionnées · Mis à jour toutes les 5 minutes
-          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p style={{ fontSize: 13, color: DIM }}>
+              Sources sélectionnées · Mis à jour toutes les 5 minutes
+            </p>
+            <button
+              type="button"
+              onClick={() => selectFilter(BOURSE)}
+              aria-pressed={active.bourse === true}
+              className="ac-tab"
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: active.bourse ? "#fff" : INDIGO,
+                background: active.bourse ? INDIGO : "rgba(42,53,96,0.07)",
+                padding: "5px 14px",
+                borderRadius: 20,
+                border: "none",
+                transition: "all 0.15s",
+              }}
+            >
+              📈 Bourse
+            </button>
+          </div>
 
           <nav aria-label="Rubriques" className="ac-noscrollbar mt-5 flex overflow-x-auto" style={{ borderBottom: `1px solid ${black(0.08)}` }}>
             {filters.map((filter) => (

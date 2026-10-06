@@ -31,7 +31,6 @@ const GEORGIA = "Georgia, 'Times New Roman', serif";
 const ink = (a: number) => `rgba(28,26,21,${a})`;
 const black = (a: number) => `rgba(0,0,0,${a})`;
 const DIM = ink(0.4);
-const GREEN = "#16A34A";
 const RED = "#C0392B";
 
 const card: CSSProperties = { background: WHITE, border: `1px solid ${black(0.07)}`, borderRadius: 14, padding: 16 };

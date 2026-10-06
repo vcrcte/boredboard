@@ -1,48 +1,62 @@
 import { NextResponse } from "next/server";
 
-// Built as a static route: rebuilt every 15 minutes, even when an early return skips the cached fetch.
-export const revalidate = 900;
+export const revalidate = 300;
 
-// Failures answer 200 with no articles: the page shows its "retry" message,
-// and a missing key or a GNews outage no longer shows up as a server error.
+type NDArticle = {
+  title: string | null;
+  description: string | null;
+  link: string | null;
+  image_url: string | null;
+  pubDate: string;
+  source_name?: string;
+  source_id?: string;
+};
+
 function unavailable(message: string) {
   return NextResponse.json({ status: "error", message, articles: [] });
 }
 
-type GNewsArticle = {
-  title: string | null;
-  description: string | null;
-  url: string | null;
-  image: string | null;
-  publishedAt: string;
-  source?: { name?: string };
-};
-
 export async function GET() {
-  const apiKey = process.env.GNEWS_API_KEY;
-  if (!apiKey) return unavailable("GNEWS_API_KEY manquante");
+  const apiKey = process.env.NEWSDATA_API_KEY;
+  if (!apiKey) return unavailable("NEWSDATA_API_KEY manquante");
 
   try {
-    const res = await fetch(`https://gnews.io/api/v4/search?q=bourse+marchés+financiers&lang=fr&max=10&apikey=${apiKey}`, {
-      next: { revalidate: 900 }, // cache 15 minutes
-    });
-    const data = await res.json();
-    if (!res.ok) return unavailable(data.errors?.[0] ?? "Erreur GNews");
+    const [resFr, resEn] = await Promise.all([
+      fetch(
+        `https://newsdata.io/api/1/latest?apikey=${apiKey}&category=business&language=fr`,
+        { next: { revalidate: 300 } }
+      ),
+      fetch(
+        `https://newsdata.io/api/1/latest?apikey=${apiKey}&category=business&language=en`,
+        { next: { revalidate: 300 } }
+      ),
+    ]);
 
-    // Same shape as the news route (NewsAPI format, read by the markets dashboard).
-    const articles = ((data.articles ?? []) as GNewsArticle[])
-      .filter((article) => article.url && article.title)
-      .map((article) => ({
-        title: article.title,
-        description: article.description,
-        url: article.url,
-        urlToImage: article.image,
-        publishedAt: article.publishedAt,
-        source: { name: article.source?.name || "Source inconnue" },
-        author: article.source?.name ?? null,
+    const dataFr = await resFr.json();
+    const dataEn = await resEn.json();
+
+    const raw = [
+      ...((dataFr.results ?? []) as NDArticle[]),
+      ...((dataEn.results ?? []) as NDArticle[]),
+    ];
+
+    const articles = raw
+      .filter((a) => a.link && a.title)
+      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+      .slice(0, 10)
+      .map((a) => ({
+        title: a.title,
+        description: a.description,
+        url: a.link,
+        urlToImage: a.image_url,
+        // NewsData sends "2026-10-06 03:41:00" in UTC: as ISO, every browser (Safari included) reads it right.
+        publishedAt: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(a.pubDate) ? `${a.pubDate.replace(" ", "T")}Z` : a.pubDate,
+        source: { name: a.source_name || a.source_id || "Source inconnue" },
+        author: a.source_name ?? null,
       }));
+
     return NextResponse.json({ status: "ok", articles });
   } catch {
-    return unavailable("GNews injoignable");
+    return unavailable("NewsData injoignable");
   }
 }

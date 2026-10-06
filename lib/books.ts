@@ -59,7 +59,8 @@ export async function getNetworkBooks(userIds: string[], status?: BookStatus): P
   const { data } = await query;
   return (data ?? []).map((row) => ({
     ...normalizeBook(row),
-    profiles: row.profiles as BookWithProfile["profiles"],
+    // Typed as a list by supabase-js; one profile per book in practice (books.user_id → profiles.id).
+    profiles: (Array.isArray(row.profiles) ? row.profiles[0] ?? null : row.profiles) as BookWithProfile["profiles"],
   }));
 }
 

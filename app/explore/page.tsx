@@ -150,7 +150,7 @@ export default function Explore() {
       setSearchResults(results);
       const ids = results.map((p) => p.id);
       const followed = await getFollowedIds(userId, ids);
-      setFollowedIds((prev) => new Set([...prev, ...followed]));
+      setFollowedIds((prev) => new Set([...Array.from(prev), ...Array.from(followed)]));
       setSearching(false);
     }, 300);
     return () => clearTimeout(timeout);
@@ -182,7 +182,7 @@ export default function Explore() {
     setInterestProfiles(profiles);
     const ids = profiles.map((p) => p.id);
     const followed = await getFollowedIds(userId, ids);
-    setFollowedIds((prev) => new Set([...prev, ...followed]));
+    setFollowedIds((prev) => new Set([...Array.from(prev), ...Array.from(followed)]));
   }, [userId]);
 
   if (!session) return <div className="min-h-screen" style={{ background: CREAM }} />;

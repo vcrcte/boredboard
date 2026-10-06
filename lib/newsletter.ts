@@ -310,7 +310,8 @@ export async function buildDigestPreview(
         title: "Dans ton réseau",
         icon: "👥",
         items: netPosts.map((p) => {
-          const profile = p.profiles as { name: string | null; username: string } | null;
+          // Typed as a list by supabase-js; one author per post in practice.
+          const profile = (Array.isArray(p.profiles) ? p.profiles[0] ?? null : p.profiles) as { name: string | null; username: string } | null;
           return {
             title: (p.content as string)?.slice(0, 80) || "Sans titre",
             description: `Partagé par ${profile?.name ?? profile?.username ?? "quelqu'un"}`,

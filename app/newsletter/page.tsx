@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import Navbar from "@/components/Navbar";
