@@ -10,12 +10,12 @@ const memberLinks = [
   // Highlighted in the logo's blue: the member's home.
   { label: "Board", href: "/dashboard", highlight: true },
   { label: "Actualités", href: "/actualites" },
-  { label: "Explorer", href: "#" },
+  { label: "Explorer", href: "/explore" },
 ];
 
 // Visitors get the landing page's sections instead.
 const visitorLinks = [
-  { label: "Explorer", href: "#" },
+  { label: "Explorer", href: "/explore" },
   { label: "Fonctionnalités", href: "/#fonctionnalites" },
   { label: "Manifeste", href: "/#manifeste" },
 ];

@@ -36,6 +36,7 @@ import {
 } from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
 import { avatarTones } from "@/lib/sample-data";
+import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -133,7 +134,7 @@ const categories: { label: string; tone: keyof typeof tones; filter?: string }[]
 // those with neither have no destination yet.
 const navItems: { icon: string; label: string; filter?: string; href?: string }[] = [
   { icon: "🏠", label: "Mon espace", filter: "Tout" },
-  { icon: "🧭", label: "Explorer" },
+  { icon: "🧭", label: "Explorer", href: "/explore" },
   { icon: "🎵", label: "Musique", filter: "Musique" },
   { icon: "📖", label: "Livres", filter: "Livres" },
   { icon: "✉️", label: "Newsletter" },
@@ -764,6 +765,8 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Phones: the right sidebar opens as a bottom sheet from the utility button.
   const [utilityOpen, setUtilityOpen] = useState(false);
+  // Users the viewer follows, shown in the left sidebar.
+  const [following, setFollowing] = useState<PublicProfile[]>([]);
 
   useEffect(() => {
     if (!sidebarOpen && !utilityOpen) return;
@@ -866,6 +869,14 @@ export default function Dashboard() {
     // Keyed on the user id: the user object changes identity on token refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, loadPosts]);
+
+  // Load the list of users the viewer follows for the sidebar.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    getFollowing(userId).then((list) => { if (!cancelled) setFollowing(list); });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const closeModal = useCallback(() => setModalOpen(false), []);
 
@@ -1037,15 +1048,34 @@ export default function Dashboard() {
           <Divider />
 
           <SectionLabel>Abonnements</SectionLabel>
-          <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
-            Tes abonnements apparaîtront ici quand tu suivras des profils.
-          </p>
+          {following.length > 0 ? (
+            <div className="flex flex-col" style={{ gap: 6 }}>
+              {following.slice(0, 6).map((user) => {
+                const t = avatarTones[(user.id.charCodeAt(0) + user.id.charCodeAt(1)) % avatarTones.length];
+                return (
+                  <Link key={user.id} href={`/profile?id=${user.id}`} className="db-hover flex items-center" style={{ gap: 8, padding: "4px 8px", borderRadius: 8 }}>
+                    <Avatar initials={getInitials(user.name, user.username)} size={26} {...t} />
+                    <span className="min-w-0 truncate" style={{ fontSize: 12, color: TEXT }}>{user.name ?? user.username}</span>
+                  </Link>
+                );
+              })}
+              {following.length > 6 && (
+                <Link href="/explore" style={{ fontSize: 11, color: INDIGO, padding: "2px 8px" }}>
+                  Voir tous ({following.length}) →
+                </Link>
+              )}
+            </div>
+          ) : (
+            <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
+              <Link href="/explore" style={{ color: INDIGO }}>Découvre des profils</Link> à suivre.
+            </p>
+          )}
 
           <Divider />
 
           <SectionLabel>Qui est en ligne</SectionLabel>
           <p style={{ fontSize: 11, color: DIM, lineHeight: 1.5 }}>
-            Aucun abonné en ligne pour le moment.
+            {following.length > 0 ? "Aucun abonné en ligne pour le moment." : "Suis des profils pour voir leur activité ici."}
           </p>
 
           <Divider />
@@ -1231,6 +1261,14 @@ export default function Dashboard() {
               </button>
             ))}
             <Link
+              href="/explore"
+              className="db-hover flex items-center"
+              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+            >
+              <span aria-hidden style={{ fontSize: 14 }}>🧭</span>
+              Explorer des profils
+            </Link>
+            <Link
               href="/profile"
               className="db-hover flex items-center"
               style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
@@ -1389,9 +1427,9 @@ export default function Dashboard() {
               </div>
               <div className="mt-2 grid grid-cols-3" style={{ gap: 8 }}>
                 {[
+                  { icon: "🧭", label: "Explorer", href: "/explore" },
                   { icon: "👤", label: "Profil", href: "/profile" },
                   { icon: "🔧", label: "Paramètres", href: "/settings" },
-                  { icon: "📰", label: "Actualités", href: "/actualites" },
                 ].map((link) => (
                   <Link
                     key={link.label}

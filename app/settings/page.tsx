@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import Navbar from "@/components/Navbar";
 import { LASTFM_USERNAME } from "@/lib/lastfm";
+import { THEMES } from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
@@ -55,12 +56,12 @@ type Check = { state: "idle" | "checking" } | { state: "found"; name: string } |
 
 export default function Settings() {
   const router = useRouter();
-  // undefined while the session is still being read, null once known to be absent.
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
+  const [interests, setInterests] = useState<string[]>([]);
   const [lastfm, setLastfm] = useState("");
   const [check, setCheck] = useState<Check>({ state: "idle" });
   const [saving, setSaving] = useState(false);
@@ -81,16 +82,20 @@ export default function Settings() {
   useEffect(() => {
     if (!userId) return;
     (async () => {
-      const { data } = await supabase.from("profiles").select("name, bio, location").eq("id", userId).maybeSingle();
+      const { data } = await supabase.from("profiles").select("name, bio, location, interests").eq("id", userId).maybeSingle();
       setName(data?.name ?? "");
       setBio(data?.bio ?? "");
       setLocation(data?.location ?? "");
-      // Read on its own: the column only exists once the migration has run.
+      setInterests(Array.isArray(data?.interests) ? data.interests : []);
       const { data: music } = await supabase.from("profiles").select("lastfm_username").eq("id", userId).maybeSingle();
       setLastfm(music?.lastfm_username ?? "");
       setLoaded(true);
     })();
   }, [userId]);
+
+  const toggleInterest = (theme: string) => {
+    setInterests((prev) => prev.includes(theme) ? prev.filter((t) => t !== theme) : [...prev, theme]);
+  };
 
   const verify = async () => {
     const username = lastfm.trim();
@@ -126,7 +131,7 @@ export default function Settings() {
       ? { error: { message: profileError } }
       : await supabase
           .from("profiles")
-          .update({ name: name.trim() || null, bio: bio.trim() || null, location: location.trim() || null })
+          .update({ name: name.trim() || null, bio: bio.trim() || null, location: location.trim() || null, interests })
           .eq("id", session.user.id);
     if (error) {
       setStatus({ ok: false, message: `Enregistrement impossible : ${error.message}` });
@@ -165,6 +170,39 @@ export default function Settings() {
             <Field label="Localisation" htmlFor="location">
               <input id="location" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="ex: Paris" style={field} />
             </Field>
+          </Section>
+
+          <Section title="Mes centres d'intérêt">
+            <p style={{ fontSize: 12, color: DIM, lineHeight: 1.5, marginTop: -8 }}>
+              Choisis tes centres d&apos;intérêt pour personnaliser ton feed et te connecter avec des profils similaires.
+            </p>
+            <div className="flex flex-wrap" style={{ gap: 8 }}>
+              {THEMES.map((theme) => {
+                const on = interests.includes(theme);
+                return (
+                  <button
+                    key={theme}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleInterest(theme)}
+                    style={{
+                      borderRadius: 20,
+                      padding: "7px 16px",
+                      fontSize: 13,
+                      transition: "background-color 0.15s",
+                      ...(on ? { background: INDIGO, color: CREAM } : { background: "#F0EBE1", color: ink(0.6) }),
+                    }}
+                  >
+                    {theme}
+                  </button>
+                );
+              })}
+            </div>
+            {interests.length > 0 && (
+              <p style={{ fontSize: 11, color: ink(0.4) }}>
+                {interests.length} {interests.length > 1 ? "thèmes sélectionnés" : "thème sélectionné"}
+              </p>
+            )}
           </Section>
 
           <Section title="Intégrations musicales">
