@@ -46,6 +46,9 @@ const SURFACE = "#F0EBE1";
 const INDIGO = "#2A3560";
 const TEXT = "#1C1A15";
 const WHITE = "#FFFFFF";
+const WARM_SHADOW = "0 2px 12px rgba(28,26,21,0.06), 0 0 0 1px rgba(0,0,0,0.04)";
+const CARD_HOVER_SHADOW = "0 4px 20px rgba(28,26,21,0.1), 0 0 0 1px rgba(0,0,0,0.06)";
+const ACCENT_GRADIENT = "linear-gradient(135deg, #2A3560, #534AB7)";
 
 const ink = (alpha: number) => `rgba(28,26,21,${alpha})`;
 const black = (alpha: number) => `rgba(0,0,0,${alpha})`;
@@ -71,6 +74,11 @@ const css = `
 .db-input::placeholder { color: ${DIM}; }
 .db-noscrollbar { scrollbar-width: none; }
 .db-noscrollbar::-webkit-scrollbar { display: none; }
+.db-card-social { transition: box-shadow 0.2s ease, transform 0.15s ease; }
+.db-card-social:hover { box-shadow: ${CARD_HOVER_SHADOW}; transform: translateY(-1px); }
+.db-story-ring { background: ${ACCENT_GRADIENT}; }
+.db-compose:focus-within { box-shadow: 0 0 0 2px rgba(42,53,96,0.15); }
+.db-trending:hover { background: rgba(42,53,96,0.06); }
 ${socialCss}
 ${socialCardsCss}
 `;
@@ -164,9 +172,10 @@ const spaces: { icon: string; title: string; detail: string; filter?: string; hr
 
 const card: CSSProperties = {
   background: WHITE,
-  border: `1px solid ${black(0.07)}`,
-  borderRadius: 14,
-  padding: 16,
+  boxShadow: WARM_SHADOW,
+  borderRadius: 16,
+  padding: 18,
+  border: "none",
 };
 
 function timeAgo(date: string) {
@@ -252,20 +261,195 @@ function CardHeader({
   time?: string;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
       {avatar}
-      <p className="min-w-0 truncate" style={{ fontSize: 12 }}>
-        <span style={{ fontWeight: 500, color: TEXT }}>{name}</span>{" "}
-        <span style={{ color: DIM }}>{verb}</span>
-      </p>
-      <span className="ml-auto flex shrink-0 items-center gap-2">
-        {pill}
-        {time && <span style={{ fontSize: 11, color: DIM }}>{time}</span>}
-      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate" style={{ fontSize: 13 }}>
+          <span style={{ fontWeight: 600, color: TEXT }}>{name}</span>{" "}
+          <span style={{ color: ink(0.5) }}>{verb}</span>
+        </p>
+        <div className="mt-0.5 flex items-center gap-2">
+          {pill}
+          {time && <span style={{ fontSize: 11, color: ink(0.35) }}>{time}</span>}
+        </div>
+      </div>
     </div>
   );
 }
 
+
+// ── Stories bar ────────────────────────────────────────────────────────
+function StoriesBar({ following, posts }: { following: PublicProfile[]; posts: Post[] | null }) {
+  // Show followed users who have posted recently (last 48h)
+  const recentPosters = new Set(
+    (posts ?? [])
+      .filter((p) => Date.now() - new Date(p.created_at).getTime() < 48 * 60 * 60 * 1000)
+      .map((p) => p.user_id)
+  );
+  const activeUsers = following.filter((u) => recentPosters.has(u.id));
+  // Also show some followed users even without recent posts (for visual richness)
+  const inactiveUsers = following.filter((u) => !recentPosters.has(u.id)).slice(0, 4);
+  const allUsers = [...activeUsers, ...inactiveUsers].slice(0, 12);
+
+  if (allUsers.length === 0) return null;
+
+  return (
+    <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 14, paddingBottom: 4 }}>
+      {allUsers.map((user) => {
+        const t = avatarTones[(user.id.charCodeAt(0) + user.id.charCodeAt(1)) % avatarTones.length];
+        const isActive = recentPosters.has(user.id);
+        return (
+          <Link
+            key={user.id}
+            href={`/profile?id=${user.id}`}
+            className="flex shrink-0 flex-col items-center"
+            style={{ gap: 4, width: 68 }}
+          >
+            <span
+              className={isActive ? "db-story-ring" : ""}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 58,
+                height: 58,
+                borderRadius: "50%",
+                padding: 3,
+                background: isActive ? undefined : black(0.08),
+              }}
+            >
+              <Avatar initials={getInitials(user.name, user.username)} size={52} {...t} />
+            </span>
+            <span
+              className="w-full truncate text-center"
+              style={{ fontSize: 10, color: isActive ? TEXT : ink(0.45), fontWeight: isActive ? 500 : 400 }}
+            >
+              {user.name?.split(" ")[0] ?? user.username}
+            </span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Compose prompt ─────────────────────────────────────────────────────
+function ComposePrompt({
+  initials,
+  displayName,
+  onOpen,
+}: {
+  initials: string;
+  displayName: string;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="db-compose" style={{ ...card, padding: 14, cursor: "pointer" }} onClick={onOpen}>
+      <div className="flex items-center gap-3">
+        <Avatar initials={initials} size={42} background={INDIGO} color={CREAM} />
+        <div
+          className="flex-1"
+          style={{
+            background: CREAM,
+            borderRadius: 24,
+            padding: "12px 18px",
+            fontSize: 13,
+            color: ink(0.35),
+          }}
+        >
+          Qu&apos;est-ce que tu partages, {displayName.split(" ")[0]} ?
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-around" style={{ borderTop: `1px solid ${black(0.05)}`, paddingTop: 10 }}>
+        {[
+          { icon: "🎵", label: "Musique", color: "#6B3FD4" },
+          { icon: "📖", label: "Livre", color: "#3B6D11" },
+          { icon: "📰", label: "Article", color: "#2A3560" },
+          { icon: "💭", label: "Réflexion", color: "#993556" },
+        ].map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+            className="db-hover flex items-center"
+            style={{ gap: 6, fontSize: 12, color: item.color, padding: "4px 10px", borderRadius: 8, fontWeight: 500 }}
+          >
+            <span aria-hidden>{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Trending topics ────────────────────────────────────────────────────
+function TrendingTopics() {
+  const trends = [
+    { tag: "#NouvelleVague", posts: 12, category: "Cinéma" },
+    { tag: "#PrixGoncourt", posts: 8, category: "Littérature" },
+    { tag: "#Impressionnisme", posts: 6, category: "Art" },
+    { tag: "#PhiloContemporaine", posts: 5, category: "Philo" },
+    { tag: "#JazzManouche", posts: 4, category: "Musique" },
+  ];
+  return (
+    <div className="flex flex-col" style={{ gap: 0 }}>
+      {trends.map((trend, i) => (
+        <div
+          key={trend.tag}
+          className="db-trending"
+          style={{ padding: "10px 10px", borderRadius: 10, cursor: "pointer" }}
+        >
+          <div className="flex items-baseline justify-between">
+            <span style={{ fontSize: 12, fontWeight: 600, color: TEXT }}>{trend.tag}</span>
+            <span style={{ fontSize: 10, color: ink(0.3) }}>{trend.posts} posts</span>
+          </div>
+          <span style={{ fontSize: 10, color: ink(0.4) }}>{trend.category}</span>
+          {i < trends.length - 1 && <div style={{ height: 1, background: black(0.04), marginTop: 8 }} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Suggested profiles ─────────────────────────────────────────────────
+function SuggestedProfiles() {
+  const suggestions = [
+    { name: "Marie L.", username: "marie_lit", bio: "Passionnée de littérature française" },
+    { name: "Thomas R.", username: "thomas_philo", bio: "Doctorant en philosophie" },
+    { name: "Léa M.", username: "lea_musique", bio: "Mélomane & critique musicale" },
+  ];
+  return (
+    <div className="flex flex-col" style={{ gap: 8 }}>
+      {suggestions.map((s, i) => {
+        const t = avatarTones[(s.name.charCodeAt(0) + s.name.charCodeAt(1)) % avatarTones.length];
+        return (
+          <div key={s.username} className="flex items-center gap-3" style={{ padding: "6px 0" }}>
+            <Avatar initials={s.name.split(" ").map((w) => w[0]).join("")} size={38} {...t} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{s.name}</p>
+              <p className="truncate" style={{ fontSize: 10, color: ink(0.4) }}>{s.bio}</p>
+            </div>
+            <Link
+              href="/explore"
+              style={{
+                fontSize: 11,
+                padding: "5px 14px",
+                borderRadius: 20,
+                background: ACCENT_GRADIENT,
+                color: CREAM,
+                fontWeight: 500,
+                textDecoration: "none",
+              }}
+            >
+              Suivre
+            </Link>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function WelcomeCard({ onNewPost }: { onNewPost: () => void }) {
   return (
@@ -376,9 +560,9 @@ function ShortcutTrackCard({ post, track }: { post: Post; track: ShortcutTrack }
   const playerStyle: CSSProperties = { background: CREAM, borderRadius: 12, padding: 14, gap: 14 };
 
   return (
-    <article className="db-card" style={card}>
+    <article className="db-card-social" style={card}>
       <CardHeader
-        avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={30} {...tone} />}
+        avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={42} {...tone} />}
         name={author?.name ?? author?.username ?? "Quelqu'un"}
         verb="partage une musique"
         pill={<span className="shrink-0" style={{ fontSize: 10, borderRadius: 10, padding: "2px 8px", background: "rgba(131,77,255,0.08)", color: "#6B3FD4" }}>Musique</span>}
@@ -444,9 +628,9 @@ function LinkPostCard({ post }: { post: Post }) {
   const tone = avatarTones[(post.user_id.charCodeAt(0) + post.user_id.charCodeAt(1)) % avatarTones.length];
 
   return (
-    <article className="db-card" style={card}>
+    <article className="db-card-social" style={card}>
       <CardHeader
-        avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={30} {...tone} />}
+        avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={42} {...tone} />}
         name={author?.name ?? author?.username ?? "Quelqu'un"}
         verb={type?.verb ?? ""}
         pill={
@@ -1105,23 +1289,25 @@ export default function Dashboard() {
           <button type="button" aria-label="Fermer le menu" className="db-hover mb-3 ml-auto flex md:hidden" style={{ borderRadius: 8, padding: "2px 8px", fontSize: 18, color: ink(0.5) }}>
             ✕
           </button>
-          <div className="flex items-center gap-2.5">
-            <Avatar initials={initials} size={40} background={INDIGO} color={CREAM} />
-            <div className="min-w-0">
-              <p className="truncate" style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{displayName}</p>
-              <p className="truncate" style={{ fontSize: 11, color: DIM }}>
+          {/* Profile card with gradient banner */}
+          <div style={{ background: WHITE, borderRadius: 16, overflow: "hidden", boxShadow: WARM_SHADOW }}>
+            <div style={{ height: 48, background: ACCENT_GRADIENT }} />
+            <div style={{ padding: "0 14px 14px", marginTop: -24 }}>
+              <Avatar initials={initials} size={48} background={INDIGO} color={CREAM} />
+              <p className="mt-2 truncate" style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>{displayName}</p>
+              <p className="truncate" style={{ fontSize: 11, color: ink(0.4) }}>
                 @{username}
                 {profile?.location && ` · ${profile.location}`}
               </p>
+              <Link
+                href="/profile"
+                className="db-hover mt-2 block w-full text-center"
+                style={{ border: `1px solid ${black(0.08)}`, borderRadius: 8, fontSize: 11, padding: "5px 10px", color: ink(0.5) }}
+              >
+                Voir mon profil
+              </Link>
             </div>
           </div>
-          <Link
-            href="/profile"
-            className="db-hover mt-2 block w-full text-center"
-            style={{ border: `1px solid ${black(0.1)}`, borderRadius: 8, fontSize: 11, padding: "5px 10px", color: ink(0.5) }}
-          >
-            Voir mon profil
-          </Link>
 
           <Divider />
 
@@ -1272,6 +1458,16 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Stories bar */}
+            {following.length > 0 && (
+              <div style={{ ...card, padding: "14px 16px", marginBottom: 4 }}>
+                <StoriesBar following={following} posts={posts} />
+              </div>
+            )}
+
+            {/* Compose prompt */}
+            <ComposePrompt initials={initials} displayName={displayName} onOpen={() => setModalOpen(true)} />
+
             {profileError && (
               <p role="alert" style={{ ...card, fontSize: 12, color: "#C0392B" }}>
                 Ton profil n&apos;a pas pu être créé : {profileError}
@@ -1340,106 +1536,60 @@ export default function Dashboard() {
         </div>
 
         {/* Right sidebar — utility panel */}
-        <aside className="hidden overflow-y-auto md:block" style={{ background: WHITE, borderLeft: `1px solid ${black(0.07)}`, padding: "20px 16px" }}>
-          {/* Quick stats */}
-          <SectionLabel>Mon activité</SectionLabel>
-          <div className="grid grid-cols-2" style={{ gap: 6 }}>
+        <aside className="hidden overflow-y-auto md:block" style={{ background: WHITE, borderLeft: `1px solid ${black(0.04)}`, padding: "20px 16px" }}>
+          {/* Compact stats row */}
+          <div className="flex items-center" style={{ gap: 6, marginBottom: 16 }}>
             {[
               { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
               { icon: "🎵", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
               { icon: "📖", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
-              { icon: "💬", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
             ].map((stat) => (
-              <div key={stat.label} className="text-center" style={{ background: CREAM, borderRadius: 10, padding: "10px 8px" }}>
-                <p style={{ fontSize: 14 }} aria-hidden>{stat.icon}</p>
-                <p style={{ fontSize: 16, fontWeight: 600, color: TEXT, lineHeight: 1.2 }}>{stat.value}</p>
-                <p style={{ fontSize: 10, color: DIM }}>{stat.label}</p>
+              <div key={stat.label} className="flex-1 text-center" style={{ background: CREAM, borderRadius: 12, padding: "8px 4px" }}>
+                <p style={{ fontSize: 15, fontWeight: 700, color: TEXT, lineHeight: 1 }}>{stat.value}</p>
+                <p style={{ fontSize: 9, color: ink(0.4), marginTop: 2 }}>{stat.label}</p>
               </div>
             ))}
           </div>
 
+          {/* Trending */}
+          <SectionLabel>🔥 Tendances</SectionLabel>
+          <TrendingTopics />
+
           <Divider />
 
-          {/* Quick actions */}
+          {/* Suggested profiles */}
+          <SectionLabel>Profils suggérés</SectionLabel>
+          <SuggestedProfiles />
+
+          <Divider />
+
+          {/* Quick links */}
           <SectionLabel>Raccourcis</SectionLabel>
-          <div className="flex flex-col" style={{ gap: 4 }}>
+          <div className="grid grid-cols-3" style={{ gap: 6 }}>
             {[
-              { icon: "➕", label: "Nouveau post", action: () => setModalOpen(true) },
-              { icon: "⚙️", label: "Personnaliser le feed", action: () => setCustomizerOpen(true) },
-            ].map((shortcut) => (
-              <button
-                key={shortcut.label}
-                type="button"
-                onClick={shortcut.action}
-                className="db-hover flex items-center text-left"
-                style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
+              { icon: "📬", label: "Newsletters", href: "/newsletter" },
+              { icon: "🎙", label: "Podcasts", href: "/podcasts" },
+              { icon: "📖", label: "Livres", href: "/livres" },
+              { icon: "🧭", label: "Explorer", href: "/explore" },
+              { icon: "📰", label: "Actus", href: "/actualites" },
+              { icon: "⚙️", label: "Réglages", href: "/settings" },
+            ].map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="db-hover flex flex-col items-center"
+                style={{ background: CREAM, padding: "10px 4px", borderRadius: 12, fontSize: 10, gap: 3, color: ink(0.6), textDecoration: "none" }}
               >
-                <span aria-hidden style={{ fontSize: 14 }}>{shortcut.icon}</span>
-                {shortcut.label}
-              </button>
+                <span aria-hidden style={{ fontSize: 16 }}>{link.icon}</span>
+                {link.label}
+              </Link>
             ))}
-            <Link
-              href="/livres"
-              className="db-hover flex items-center"
-              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
-            >
-              <span aria-hidden style={{ fontSize: 14 }}>📖</span>
-              Mes livres
-            </Link>
-            <Link
-              href="/newsletter"
-              className="db-hover flex items-center"
-              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
-            >
-              <span aria-hidden style={{ fontSize: 14 }}>📬</span>
-              Newsletters
-            </Link>
-            <Link
-              href="/podcasts"
-              className="db-hover flex items-center"
-              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
-            >
-              <span aria-hidden style={{ fontSize: 14 }}>🎙</span>
-              Podcasts{podcastSubCount > 0 ? ` (${podcastSubCount})` : ""}
-            </Link>
-            <Link
-              href="/explore"
-              className="db-hover flex items-center"
-              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
-            >
-              <span aria-hidden style={{ fontSize: 14 }}>🧭</span>
-              Explorer des profils
-            </Link>
-            <Link
-              href="/profile"
-              className="db-hover flex items-center"
-              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
-            >
-              <span aria-hidden style={{ fontSize: 14 }}>👤</span>
-              Mon profil
-            </Link>
-            <Link
-              href="/settings"
-              className="db-hover flex items-center"
-              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
-            >
-              <span aria-hidden style={{ fontSize: 14 }}>🔧</span>
-              Paramètres
-            </Link>
-            <Link
-              href="/actualites"
-              className="db-hover flex items-center"
-              style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}
-            >
-              <span aria-hidden style={{ fontSize: 14 }}>📰</span>
-              Toutes les actualités
-            </Link>
           </div>
 
           <Divider />
 
-          {/* Themes — visual indicator of active interests */}
-          <SectionLabel>Mes thèmes actifs</SectionLabel>
+          {/* Active themes */}
+          <SectionLabel>Mes thèmes</SectionLabel>
           <div className="flex flex-wrap" style={{ gap: 5 }}>
             {(preferences.themes.length > 0 ? preferences.themes : ["Aucun thème sélectionné"]).map((theme) => (
               <span
@@ -1462,40 +1612,36 @@ export default function Dashboard() {
             className="db-hover mt-2 w-full"
             style={{ border: `1px solid ${black(0.08)}`, borderRadius: 8, fontSize: 11, padding: 6, color: ink(0.6) }}
           >
-            Modifier mes thèmes
+            Personnaliser
           </button>
 
           <Divider />
 
-          {/* Newsletter */}
-          <SectionLabel>Ta newsletter</SectionLabel>
-          <Link href="/newsletter" style={{ textDecoration: "none" }}>
-            <div className="db-hover" style={{ background: CREAM, borderRadius: 12, padding: 12, cursor: "pointer" }}>
-              <p className="mb-1" style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>📬 Curio Daily</p>
-              <p className="mb-2" style={{ fontSize: 11, color: DIM }}>Découvre et abonne-toi à des newsletters culturelles françaises.</p>
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, color: INDIGO, fontWeight: 500 }}>Gérer mes abonnements →</span>
+          {/* Newsletter + Podcasts compact */}
+          <div className="flex flex-col" style={{ gap: 8 }}>
+            <Link href="/newsletter" style={{ textDecoration: "none" }}>
+              <div className="db-hover flex items-center gap-3" style={{ background: CREAM, borderRadius: 12, padding: 12, cursor: "pointer" }}>
+                <span style={{ fontSize: 20 }}>📬</span>
+                <div className="min-w-0 flex-1">
+                  <p style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>Newsletters</p>
+                  <p style={{ fontSize: 10, color: ink(0.4) }}>Culturelles françaises</p>
+                </div>
+                <span style={{ fontSize: 11, color: INDIGO }}>→</span>
               </div>
-            </div>
-          </Link>
-
-          <Divider />
-
-          {/* Podcasts */}
-          <SectionLabel>Tes podcasts</SectionLabel>
-          <Link href="/podcasts" style={{ textDecoration: "none" }}>
-            <div className="db-hover" style={{ background: CREAM, borderRadius: 12, padding: 12, cursor: "pointer" }}>
-              <p className="mb-1" style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>🎙 Podcasts culturels</p>
-              <p className="mb-2" style={{ fontSize: 11, color: DIM }}>
-                {podcastSubCount > 0
-                  ? `${podcastSubCount} podcast${podcastSubCount > 1 ? "s" : ""} suivi${podcastSubCount > 1 ? "s" : ""}`
-                  : "Découvre les meilleurs podcasts culturels français."}
-              </p>
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, color: INDIGO, fontWeight: 500 }}>Gérer mes podcasts →</span>
+            </Link>
+            <Link href="/podcasts" style={{ textDecoration: "none" }}>
+              <div className="db-hover flex items-center gap-3" style={{ background: CREAM, borderRadius: 12, padding: 12, cursor: "pointer" }}>
+                <span style={{ fontSize: 20 }}>🎙</span>
+                <div className="min-w-0 flex-1">
+                  <p style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>
+                    Podcasts{podcastSubCount > 0 ? ` · ${podcastSubCount}` : ""}
+                  </p>
+                  <p style={{ fontSize: 10, color: ink(0.4) }}>Découvrir & écouter</p>
+                </div>
+                <span style={{ fontSize: 11, color: INDIGO }}>→</span>
               </div>
-            </div>
-          </Link>
+            </Link>
+          </div>
         </aside>
       </div>
 
