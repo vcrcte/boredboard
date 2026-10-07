@@ -44,7 +44,7 @@ export const VIDEO_SOURCES: VideoSource[] = [
     description: "L'Histoire avec un grand H racontée de façon captivante — Benjamin Brillaud",
     theme: "Histoire",
     icon: "⚔️",
-    channel_url: "https://www.youtube.com/@NotaBeneMusic",
+    channel_url: "https://www.youtube.com/@notabenemovies",
     featured_video_id: "zyykfxmOEFE",
     color: "#8B6914",
   },

@@ -38,61 +38,43 @@ function VideoCard({
   subscribed,
   toggling,
   onToggle,
-  expanded,
-  onExpand,
 }: {
   source: VideoSource;
   subscribed: boolean;
   toggling: boolean;
   onToggle: () => void;
-  expanded: boolean;
-  onExpand: () => void;
 }) {
   return (
     <article style={card} className="flex flex-col">
-      {/* YouTube embed / thumbnail */}
-      <div
-        className="relative cursor-pointer"
-        style={{ aspectRatio: "16/9", background: black(0.04) }}
-        onClick={onExpand}
+      {/* Channel banner — links to YouTube */}
+      <a
+        href={source.channel_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="relative block"
+        style={{
+          aspectRatio: "16/9",
+          background: `linear-gradient(135deg, ${source.color}20, ${source.color}40)`,
+        }}
       >
-        {expanded ? (
-          <iframe
-            src={`https://www.youtube.com/embed/${source.featured_video_id}?autoplay=1`}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            className="absolute inset-0 h-full w-full"
-            style={{ border: "none" }}
-          />
-        ) : (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`https://img.youtube.com/vi/${source.featured_video_id}/mqdefault.jpg`}
-              alt={source.name}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div
-              className="absolute inset-0 flex items-center justify-center"
-              style={{ background: "rgba(0,0,0,0.2)" }}
-            >
-              <span
-                className="flex items-center justify-center"
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  background: "rgba(255,0,0,0.9)",
-                  color: WHITE,
-                  fontSize: 20,
-                }}
-              >
-                ▶
-              </span>
-            </div>
-          </>
-        )}
-      </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <span style={{ fontSize: 40 }}>{source.icon}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>{source.name}</span>
+          <span
+            className="flex items-center gap-1"
+            style={{
+              fontSize: 11,
+              padding: "4px 12px",
+              borderRadius: 20,
+              background: "rgba(255,0,0,0.9)",
+              color: WHITE,
+              fontWeight: 500,
+            }}
+          >
+            ▶ Voir sur YouTube
+          </span>
+        </div>
+      </a>
 
       <div style={{ padding: 16 }}>
         <div className="flex items-start gap-3">
@@ -164,7 +146,6 @@ export default function Videos() {
   const [themeFilter, setThemeFilter] = useState<string | null>(null);
   const [subs, setSubs] = useState<VideoSubscription[] | null>(null);
   const [toggling, setToggling] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -278,8 +259,6 @@ export default function Videos() {
                   subscribed={subscribedIds.has(source.id)}
                   toggling={toggling.has(source.id)}
                   onToggle={() => handleToggle(source.id)}
-                  expanded={expanded === source.id}
-                  onExpand={() => setExpanded(expanded === source.id ? null : source.id)}
                 />
               ))}
             </div>
@@ -313,8 +292,6 @@ export default function Videos() {
                     subscribed
                     toggling={toggling.has(source.id)}
                     onToggle={() => handleToggle(source.id)}
-                    expanded={expanded === source.id}
-                    onExpand={() => setExpanded(expanded === source.id ? null : source.id)}
                   />
                 ))}
               </div>
