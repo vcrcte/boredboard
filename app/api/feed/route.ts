@@ -52,14 +52,15 @@ export async function GET(request: Request) {
       .maybeSingle(),
   ]);
 
-  const interactions = (interactionsRes.data ?? []) as RawInteraction[];
+  const interactions = (interactionsRes.data ?? []) as unknown as RawInteraction[];
   const followingIds = (followsRes.data ?? []).map((f) => f.following_id as string);
   const interests: string[] = profileRes.data?.interests ?? [];
 
   // ── 3. Build signals & score every post ──────────────────────────────────
   const signals = buildSignals(interactions, followingIds, interests);
 
-  const scored: ScoredPost[] = (posts ?? []).map((post) => ({
+  // Supabase infers the profiles join as an array; it's a single row at runtime
+  const scored = (posts ?? []).map((post) => ({
     ...post,
     likes_count: post.likes_count ?? 0,
     _score: scorePost(
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
       },
       signals,
     ),
-  }));
+  })) as unknown as ScoredPost[];
 
   // Sort by score descending
   scored.sort((a, b) => b._score - a._score);
@@ -82,6 +83,7 @@ export async function GET(request: Request) {
   const feed = diversify(scored).slice(0, 30);
 
   // Strip internal score before sending
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const result = feed.map(({ _score, ...rest }) => rest);
 
   return NextResponse.json(result);
