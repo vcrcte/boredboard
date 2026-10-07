@@ -95,9 +95,14 @@ async function setCache(cat: string, q: string, articles: CachedArticle[]) {
 }
 
 /* ── Fetch from NewsData API ───────────────────────────────── */
+let _lastDiag: Record<string, unknown> = {};
+
 async function fetchFromAPI(cat: string, q: string, lang = "fr"): Promise<CachedArticle[] | null> {
   const apiKey = process.env.NEWSDATA_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    _lastDiag = { step: "no-api-key" };
+    return null;
+  }
 
   try {
     const params = new URLSearchParams({ apikey: apiKey, language: lang });
@@ -116,7 +121,12 @@ async function fetchFromAPI(cat: string, q: string, lang = "fr"): Promise<Cached
     clearTimeout(timeout);
 
     const data = await res.json();
-    if (data.status !== "success") return null;
+    if (data.status !== "success") {
+      _lastDiag = { step: "api-not-success", apiStatus: data.status, apiMessage: data.results?.message ?? data.message ?? "unknown" };
+      return null;
+    }
+
+    _lastDiag = { step: "api-ok", rawCount: (data.results ?? []).length };
 
     return ((data.results ?? []) as NDArticle[])
       .filter((a) => a.link && a.title && a.description)
@@ -131,7 +141,8 @@ async function fetchFromAPI(cat: string, q: string, lang = "fr"): Promise<Cached
         source: { name: a.source_name || a.source_id || "Source inconnue" },
         author: a.source_name ?? null,
       }));
-  } catch {
+  } catch (e) {
+    _lastDiag = { step: "api-error", error: String(e).slice(0, 200) };
     return null;
   }
 }
@@ -180,7 +191,7 @@ export async function GET(request: Request) {
 
   // 5. Nothing at all — return ok with empty (client will retry)
   return NextResponse.json(
-    { status: "ok", articles: [], source: "empty" },
+    { status: "ok", articles: [], source: "empty", _diag: _lastDiag },
     { headers: { "Cache-Control": "no-cache", "X-News-Version": "3" } }
   );
 }
