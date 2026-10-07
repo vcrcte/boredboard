@@ -15,6 +15,16 @@ import {
   type Quote,
 } from "@/lib/markets";
 import type { NewsArticle } from "@/lib/news";
+import {
+  loadPortfolio,
+  addPortfolioPosition,
+  removePortfolioPosition,
+  loadAlerts,
+  addAlert,
+  removeAlert,
+  type PortfolioPosition,
+  type PriceAlert,
+} from "@/lib/user-markets";
 
 // The "Bourse" section of /actualites: quotes, charts and market news for a
 // signed-in reader. Light cream palette; only the ticker band stays dark.
@@ -420,62 +430,14 @@ function newsTag(article: NewsArticle) {
   return null;
 }
 
-// Placeholder agenda: these entries are static and not tied to today's date.
-const macroCalendar = [
-  { when: "Auj. 16h00", event: "NFP États-Unis", importance: "Élevé" },
-  { when: "Lun. 10h00", event: "PMI Zone Euro", importance: "Moyen" },
-  { when: "Mar. 14h30", event: "CPI États-Unis", importance: "Élevé" },
-  { when: "Mer. 20h00", event: "Minutes Fed", importance: "Élevé" },
-  { when: "Jeu. 09h00", event: "PIB Allemagne", importance: "Moyen" },
-] as const;
-
-const importanceStyles = {
-  Élevé: { background: "rgba(220,38,38,0.08)", color: "#DC2626" },
-  Moyen: { background: "rgba(196,169,74,0.1)", color: "#8B6914" },
-  Faible: { background: "rgba(0,0,0,0.05)", color: "rgba(28,26,21,0.4)" },
-};
-
-// Placeholder data: none of the three lists below comes from a live source.
-const earnings = [
-  { icon: "🍎", name: "Apple", symbol: "AAPL", when: "Jeu. 22h", consensus: "Acheter" },
-  { icon: "📊", name: "JPMorgan", symbol: "JPM", when: "Ven. 13h", consensus: "Acheter" },
-  { icon: "🔵", name: "Meta", symbol: "META", when: "Mer. 22h", consensus: "Neutre" },
-  { icon: "⚡", name: "Tesla", symbol: "TSLA", when: "Mar. 22h", consensus: "Neutre" },
-  { icon: "🔍", name: "Alphabet", symbol: "GOOGL", when: "Jeu. 22h", consensus: "Acheter" },
-] as const;
-
-const consensusStyles = {
-  Acheter: { background: "rgba(22,163,74,0.08)", color: "#16A34A" },
-  Neutre: { background: "rgba(196,169,74,0.08)", color: "#8B6914" },
-};
-
-const dividends = [
-  { symbol: "TTE.PA", name: "TotalEnergies", amount: "0,79 €", date: "15 oct." },
-  { symbol: "BNP.PA", name: "BNP Paribas", amount: "2,90 €", date: "22 oct." },
-  { symbol: "OR.PA", name: "L'Oréal", amount: "3,00 €", date: "28 oct." },
-  { symbol: "SAN.PA", name: "Sanofi", amount: "0,56 €", date: "5 nov." },
-];
-
-const priceAlerts = [
-  { label: "AAPL si > 350 $", target: "350,00 $" },
-  { label: "CAC 40 si < 7500", target: "7 500" },
-  { label: "Or si > 4500 $", target: "4 500,00 $" },
-];
-
-// A made-up portfolio, valued with the live quotes.
-const portfolio = [
-  { symbol: "AAPL", quantity: 10, label: "10 actions" },
-  { symbol: "NVDA", quantity: 5, label: "5 actions" },
-  { symbol: "BNP.PA", quantity: 20, label: "20 actions" },
-  { symbol: "GC=F", quantity: 1, label: "1 once" },
-  { symbol: "EURUSD=X", quantity: 10_000, label: "10k €" },
-];
+// Portfolio and alerts are now loaded dynamically from user-markets.ts
 
 const money = (value: number, currency: string) =>
   `${value.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} ${currency === "EUR" ? "€" : "$"}`;
 
 /** Values each position in dollars from the quotes on screen; null until they are all available. */
-function valuePortfolio(markets: MarketsResponse) {
+function valuePortfolio(markets: MarketsResponse, portfolio: { id: string; symbol: string; quantity: number; label: string }[]) {
+  if (portfolio.length === 0) return null;
   const quotes = [...markets.stocksUs, ...markets.stocksFr, ...markets.commodities, ...markets.fx];
   const eurusd = markets.fx.find((quote) => quote.symbol === "EURUSD=X")?.price;
   if (!eurusd) return null;
@@ -632,6 +594,12 @@ export default function MarketsDashboard({ session }: { session: Session }) {
   const [history, setHistory] = useState<MarketHistory | null>(null);
   const [historyError, setHistoryError] = useState(false);
 
+  // User portfolio & alerts (loaded from Supabase or localStorage)
+  const [userPortfolio, setUserPortfolio] = useState<PortfolioPosition[]>([]);
+  const [userAlerts, setUserAlerts] = useState<PriceAlert[]>([]);
+  const [portfolioInput, setPortfolioInput] = useState("");
+  const [alertInput, setAlertInput] = useState("");
+
   const loadQuotes = useCallback(async () => {
     try {
       const res = await fetch("/api/markets/quotes");
@@ -690,6 +658,10 @@ export default function MarketsDashboard({ session }: { session: Session }) {
     );
     loadNews();
     loadQuotes();
+    // Load user portfolio & alerts
+    const userId = session.user.id;
+    loadPortfolio(userId).then(setUserPortfolio);
+    loadAlerts(userId).then(setUserAlerts);
     fetch("/api/markets/history")
       .then(async (res) => {
         if (!res.ok) throw new Error();
@@ -731,6 +703,42 @@ export default function MarketsDashboard({ session }: { session: Session }) {
     setWatchlist([...watchlist, symbol]);
   };
 
+  const handleAddPortfolio = async (event: FormEvent) => {
+    event.preventDefault();
+    const parts = portfolioInput.trim().split(/\s+/);
+    const symbol = parts[0]?.toUpperCase();
+    const qty = parseFloat(parts[1] ?? "1");
+    if (!symbol || !SYMBOL_PATTERN.test(symbol) || isNaN(qty) || qty <= 0) return;
+    const label = qty === 1 ? "1 unité" : `${qty} unités`;
+    const pos = await addPortfolioPosition(session.user.id, symbol, qty, label);
+    if (pos) setUserPortfolio((prev) => [...prev, pos]);
+    setPortfolioInput("");
+  };
+
+  const handleRemovePortfolio = async (id: string) => {
+    await removePortfolioPosition(session.user.id, id);
+    setUserPortfolio((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleAddAlert = async (event: FormEvent) => {
+    event.preventDefault();
+    // Format: "AAPL > 350" or "CAC < 7500"
+    const match = alertInput.trim().match(/^(\S+)\s*([><])\s*(\d+[\d.,]*)/);
+    if (!match) return;
+    const [, symbol, op, val] = match;
+    const target = parseFloat(val.replace(",", "."));
+    if (!symbol || isNaN(target)) return;
+    const condition = op === ">" ? "above" as const : "below" as const;
+    const alert = await addAlert(session.user.id, symbol, condition, target);
+    if (alert) setUserAlerts((prev) => [...prev, alert]);
+    setAlertInput("");
+  };
+
+  const handleRemoveAlert = async (id: string) => {
+    await removeAlert(session.user.id, id);
+    setUserAlerts((prev) => prev.filter((a) => a.id !== id));
+  };
+
   const tickerItems = markets ? [...markets.indices, ...markets.fx, ...markets.commodities] : [];
   const heroIndices = markets
     ? HERO_SYMBOLS.map((symbol) => markets.indices.find((quote) => quote.symbol === symbol)).filter((quote): quote is Quote => Boolean(quote))
@@ -755,7 +763,7 @@ export default function MarketsDashboard({ session }: { session: Session }) {
   const live = !quotesError && markets !== null;
   const vix = markets?.volatility?.[0] ?? null;
   const quotesFailed = quotesError && !markets;
-  const holdings = markets ? valuePortfolio(markets) : null;
+  const holdings = markets && userPortfolio.length > 0 ? valuePortfolio(markets, userPortfolio) : null;
   const maxSectorMove = Math.max(0.01, ...(markets?.sectors ?? []).map((sector) => Math.abs(sector.changePercent)));
 
   return (
@@ -951,49 +959,31 @@ export default function MarketsDashboard({ session }: { session: Session }) {
 
           <Divider />
 
-          <Label className="mb-3">Dividendes à venir</Label>
-          <ul>
-            {dividends.map((item, index) => (
-              <li
-                key={item.symbol}
-                className="flex items-baseline justify-between gap-2"
-                style={{ padding: "7px 0", borderBottom: index < dividends.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
-              >
-                <p className="min-w-0 truncate">
-                  <span style={{ fontSize: 11, fontWeight: 500, color: INDIGO }}>{item.symbol}</span>{" "}
-                  <span style={{ fontSize: 10, color: DIM }}>{item.name}</span>
-                </p>
-                <p className="shrink-0" style={{ fontVariantNumeric: "tabular-nums" }}>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>{item.amount}</span>
-                  <span className="ml-2" style={{ fontSize: 10, color: DIM }}>{item.date}</span>
-                </p>
-              </li>
-            ))}
-          </ul>
-
-          <Divider />
-
           <Label className="mb-3">Alertes prix</Label>
-          <ul>
-            {priceAlerts.map((alert) => (
-              <li key={alert.label} className="mb-2 flex items-center justify-between gap-2" style={{ background: BG, borderRadius: 8, padding: 9 }}>
-                <span className="min-w-0 truncate" style={{ fontSize: 11, color: TEXT }}>
-                  <span aria-hidden>🔔</span> {alert.label}
-                </span>
-                <span className="shrink-0" style={{ fontSize: 11, fontWeight: 500, color: GOLD }}>{alert.target}</span>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            className="mt-2 w-full text-center hover:bg-black/[0.04]"
-            style={{ border: `1px solid ${black(0.08)}`, borderRadius: 8, fontSize: 11, padding: 6, color: text(0.6) }}
-          >
-            + Ajouter une alerte
-          </button>
-          <p className="mt-2" style={{ fontSize: 9, color: text(0.3), fontStyle: "italic" }}>
-Dividendes et alertes : données d&apos;exemple ; aucune notification n&apos;est envoyée.
-          </p>
+          {userAlerts.length === 0 ? (
+            <p style={{ fontSize: 11, color: DIM, padding: "4px 0" }}>Aucune alerte configurée.</p>
+          ) : (
+            <ul>
+              {userAlerts.map((alert) => (
+                <li key={alert.id} className="mb-2 flex items-center justify-between gap-2" style={{ background: BG, borderRadius: 8, padding: 9 }}>
+                  <span className="min-w-0 truncate" style={{ fontSize: 11, color: TEXT }}>
+                    <span aria-hidden>🔔</span> {alert.label}
+                  </span>
+                  <button type="button" onClick={() => handleRemoveAlert(alert.id)} aria-label="Supprimer" className="mk-hover shrink-0" style={{ fontSize: 11, color: DIM }}>✕</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={handleAddAlert} className="mt-2">
+            <input
+              value={alertInput}
+              onChange={(e) => setAlertInput(e.target.value)}
+              placeholder="AAPL > 350"
+              aria-label="Ajouter une alerte"
+              className="mk-input w-full"
+              style={{ background: BG, border: `1px solid ${black(0.08)}`, borderRadius: 6, padding: "6px 10px", fontFamily: MONO, fontSize: 11, color: TEXT, outline: "none" }}
+            />
+          </form>
         </section>
         </div>
 
@@ -1052,30 +1042,39 @@ Dividendes et alertes : données d&apos;exemple ; aucune notification n&apos;est
         </section>
 
         <section style={panel}>
-          <Label className="mb-3">Earnings à venir</Label>
-          <ul>
-            {earnings.map((item, index) => (
-              <li
-                key={item.symbol}
-                className="flex items-center justify-between gap-2"
-                style={{ padding: "8px 0", borderBottom: index < earnings.length - 1 ? `1px solid ${black(0.05)}` : "none" }}
-              >
-                <p className="min-w-0 truncate">
-                  <span aria-hidden>{item.icon}</span>{" "}
-                  <span style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{item.name}</span>
-                  <span className="ml-1" style={{ fontSize: 10, color: DIM }}>{item.symbol}</span>
-                </p>
-                <p className="flex shrink-0 items-center gap-1.5">
-                  <span style={{ fontSize: 10, color: DIM }}>{item.when}</span>
-                  <span style={{ ...consensusStyles[item.consensus], fontSize: 9, borderRadius: 4, padding: "2px 6px" }}>{item.consensus}</span>
-                </p>
-              </li>
-            ))}
-          </ul>
-
-          <p className="mt-3" style={{ fontSize: 9, color: text(0.3), fontStyle: "italic" }}>
-            Earnings et consensus : données d&apos;exemple, pas des recommandations.
-          </p>
+          <Label className="mb-3">Movers du jour</Label>
+          {!movers ? (
+            <SkeletonRows count={4} />
+          ) : (
+            <>
+              {movers.gainers.length > 0 && (
+                <>
+                  <p className="mb-1" style={{ fontSize: 9, color: UP, textTransform: "uppercase", letterSpacing: "0.08em" }}>Hausse</p>
+                  <ul>
+                    {movers.gainers.map((q) => (
+                      <li key={q.symbol} className="flex items-baseline justify-between gap-2" style={{ padding: "6px 0" }}>
+                        <span style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>{q.name ?? q.symbol}</span>
+                        <span style={{ fontSize: 11, color: UP, fontVariantNumeric: "tabular-nums" }}>{formatPercent(q.changePercent)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {movers.losers.length > 0 && (
+                <>
+                  <p className="mb-1 mt-2" style={{ fontSize: 9, color: DOWN, textTransform: "uppercase", letterSpacing: "0.08em" }}>Baisse</p>
+                  <ul>
+                    {movers.losers.map((q) => (
+                      <li key={q.symbol} className="flex items-baseline justify-between gap-2" style={{ padding: "6px 0" }}>
+                        <span style={{ fontSize: 11, fontWeight: 500, color: TEXT }}>{q.name ?? q.symbol}</span>
+                        <span style={{ fontSize: 11, color: DOWN, fontVariantNumeric: "tabular-nums" }}>{formatPercent(q.changePercent)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          )}
         </section>
         </div>
 
@@ -1093,7 +1092,6 @@ Dividendes et alertes : données d&apos;exemple ; aucune notification n&apos;est
           <Divider />
 
           <Label className="mb-2">Sentiment</Label>
-          <Gauge label="Fear & Greed Index" value={72} display="72" color={UP} note="Avidité" />
           {vix ? (
             <Gauge
               label="VIX (Volatilité)"
@@ -1105,10 +1103,6 @@ Dividendes et alertes : données d&apos;exemple ; aucune notification n&apos;est
           ) : (
             <Gauge label="VIX (Volatilité)" value={0} display="n.d." color={GOLD} note={markets ? "Indisponible" : "Chargement…"} />
           )}
-          <Gauge label="Momentum S&P 500" value={65} display="65" color={INDIGO} note="Haussier" />
-          <p className="mt-2" style={{ fontSize: 9, color: text(0.3), fontStyle: "italic" }}>
-            Fear &amp; Greed et momentum : données d&apos;exemple.
-          </p>
 
           <Divider />
 
@@ -1265,26 +1259,7 @@ Dividendes et alertes : données d&apos;exemple ; aucune notification n&apos;est
           <Divider />
 
           <Label className="mb-2">Calendrier macro</Label>
-          <ul>
-            {macroCalendar.map((item, index) => (
-              <li
-                key={item.event}
-                className="flex items-center justify-between gap-2"
-                style={{ padding: "7px 0", borderBottom: index < macroCalendar.length - 1 ? `1px solid ${black(0.04)}` : "none" }}
-              >
-                <p className="min-w-0 truncate">
-                  <span style={{ fontFamily: MONO, fontSize: 10, color: INDIGO }}>{item.when}</span>
-                  <span className="ml-2" style={{ fontSize: 11, color: TEXT }}>{item.event}</span>
-                </p>
-                <span className="shrink-0" style={{ ...importanceStyles[item.importance], fontSize: 9, borderRadius: 4, padding: "2px 6px" }}>
-                  {item.importance}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2" style={{ fontSize: 9, color: text(0.3), fontStyle: "italic" }}>
-            Calendrier : données d&apos;exemple.
-          </p>
+          <p style={{ fontSize: 11, color: DIM, padding: "8px 0" }}>Bientôt disponible.</p>
 
           <p className="mt-auto text-center" style={{ fontSize: 9, color: DIM, fontStyle: "italic", paddingTop: 12, marginTop: 12, borderTop: `1px solid ${black(0.05)}` }}>
             Données en différé · Yahoo Finance
@@ -1292,23 +1267,33 @@ Dividendes et alertes : données d&apos;exemple ; aucune notification n&apos;est
         </aside>
 
         <section style={panel}>
-          <Label className="mb-3">Portefeuille simulé</Label>
-          <p className="mb-3" style={{ fontSize: 11, color: DIM, fontStyle: "italic" }}>
-            Performance d&apos;un portefeuille fictif suivi en temps réel.
-          </p>
-          {!holdings ? (
+          <Label className="mb-3">Mon portefeuille</Label>
+          <form onSubmit={handleAddPortfolio} className="mb-3">
+            <input
+              value={portfolioInput}
+              onChange={(e) => setPortfolioInput(e.target.value)}
+              placeholder="AAPL 10"
+              aria-label="Ajouter une position (SYMBOLE QUANTITÉ)"
+              className="mk-input w-full"
+              style={{ background: BG, border: `1px solid ${black(0.08)}`, borderRadius: 6, padding: "6px 10px", fontFamily: MONO, fontSize: 11, color: TEXT, outline: "none" }}
+            />
+          </form>
+          {userPortfolio.length === 0 && !holdings ? (
+            <p style={{ fontSize: 11, color: DIM, padding: "4px 0" }}>Ajoute un ticker pour suivre ton portefeuille.</p>
+          ) : !holdings ? (
             <SkeletonRows count={5} />
           ) : (
             <>
               <ul style={{ fontVariantNumeric: "tabular-nums" }}>
                 {holdings.positions.map((position) => (
-                  <li key={position.symbol} className="flex items-baseline gap-2" style={{ padding: "8px 0", borderBottom: `1px solid ${black(0.05)}` }}>
+                  <li key={position.symbol} className="flex items-center gap-2" style={{ padding: "8px 0", borderBottom: `1px solid ${black(0.05)}` }}>
                     <span className="min-w-0 truncate" style={{ fontSize: 11, fontWeight: 500, color: INDIGO }}>{position.symbol}</span>
                     <span className="shrink-0" style={{ fontSize: 10, color: DIM }}>{position.label}</span>
                     <span className="ml-auto shrink-0" style={{ fontSize: 11, color: TEXT }}>{money(position.value, position.currency)}</span>
                     <span className="shrink-0 text-right" style={{ width: 48, fontSize: 10, color: changeColor(position.changePercent) }}>
                       {formatPercent(position.changePercent)}
                     </span>
+                    <button type="button" onClick={() => handleRemovePortfolio(position.id)} aria-label={`Retirer ${position.symbol}`} className="mk-hover shrink-0" style={{ fontSize: 11 }}>✕</button>
                   </li>
                 ))}
               </ul>

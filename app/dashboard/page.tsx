@@ -151,11 +151,7 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "✉️", label: "Newsletter", href: "/newsletter" },
 ];
 
-const spaces: { icon: string; title: string; detail: string; filter?: string; href?: string }[] = [
-  { icon: "\u{1F3B5}", title: "Musique", detail: "4 titres", filter: "Musique" },
-  { icon: "\u{1F4D6}", title: "Livres", detail: "en cours", href: "/livres" },
-  { icon: "\u{1F399}", title: "Podcasts", detail: "favoris", href: "/podcasts" },
-];
+// spaces is now computed inside the component with dynamic counts
 
 function timeAgo(date: string) {
   const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
@@ -456,16 +452,7 @@ function TrendingTopics({ posts, t }: { posts: Post[] | null; t: typeof LIGHT })
     }
   }
 
-  // Fallback static trends if no posts
-  const staticTrends = [
-    { tag: "#NouvelleVague", posts: 12, category: "Cinéma" },
-    { tag: "#PrixGoncourt", posts: 8, category: "Littérature" },
-    { tag: "#Impressionnisme", posts: 6, category: "Art" },
-    { tag: "#PhiloContemporaine", posts: 5, category: "Philo" },
-    { tag: "#JazzManouche", posts: 4, category: "Musique" },
-  ];
-
-  const dynamicTrends = [...categoryCounts.entries()]
+  const trends = [...categoryCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([cat, count]) => ({
@@ -474,7 +461,9 @@ function TrendingTopics({ posts, t }: { posts: Post[] | null; t: typeof LIGHT })
       category: cat,
     }));
 
-  const trends = dynamicTrends.length >= 3 ? dynamicTrends : staticTrends;
+  if (trends.length === 0) {
+    return <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}>Pas encore de tendances. Les sujets populaires apparaîtront ici au fil des publications.</p>;
+  }
 
   return (
     <div className="flex flex-col" style={{ gap: 0 }}>
@@ -492,27 +481,55 @@ function TrendingTopics({ posts, t }: { posts: Post[] | null; t: typeof LIGHT })
   );
 }
 
-// ── Suggested profiles ────────────────────────────────────────────────────
-function SuggestedProfiles({ t }: { t: typeof LIGHT }) {
-  const suggestions = [
-    { name: "Marie L.", username: "marie_lit", bio: "Passionnée de littérature française" },
-    { name: "Thomas R.", username: "thomas_philo", bio: "Doctorant en philosophie" },
-    { name: "Léa M.", username: "lea_musique", bio: "Mélomane & critique musicale" },
-  ];
+// ── Suggested profiles (real data from Supabase) ────────────────────────────
+function SuggestedProfiles({ t, userId }: { t: typeof LIGHT; userId: string | undefined }) {
+  const [suggestions, setSuggestions] = useState<{ id: string; name: string | null; username: string; bio: string | null; shared_interests: string[] }[]>([]);
+  const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { getSuggested } = await import("@/lib/social");
+      const results = await getSuggested(userId, 5);
+      if (!cancelled) setSuggestions(results.map((p) => ({ id: p.id, name: p.name, username: p.username, bio: p.bio, shared_interests: p.shared_interests })));
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const handleFollow = async (targetId: string) => {
+    if (!userId) return;
+    const { follow } = await import("@/lib/social");
+    const ok = await follow(userId, targetId);
+    if (ok) setFollowingSet((prev) => new Set(prev).add(targetId));
+  };
+
+  if (suggestions.length === 0) {
+    return <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}>Aucune suggestion pour le moment. Ajoute des centres d&apos;intérêt à ton profil pour découvrir des personnes.</p>;
+  }
+
   return (
     <div className="flex flex-col" style={{ gap: 8 }}>
       {suggestions.map((s) => {
-        const tone = avatarTones[(s.name.charCodeAt(0) + s.name.charCodeAt(1)) % avatarTones.length];
+        const displayName = s.name ?? s.username;
+        const tone = avatarTones[(displayName.charCodeAt(0) + (displayName.charCodeAt(1) || 0)) % avatarTones.length];
+        const alreadyFollowed = followingSet.has(s.id);
         return (
           <div key={s.username} className="flex items-center gap-3" style={{ padding: "6px 0" }}>
-            <Avatar initials={s.name.split(" ").map((w) => w[0]).join("")} size={38} {...tone} />
+            <Avatar initials={getInitials(s.name, s.username)} size={38} {...tone} />
             <div className="min-w-0 flex-1">
-              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{s.name}</p>
-              <p className="truncate" style={{ fontSize: 10, color: t.ink(0.4) }}>{s.bio}</p>
+              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{displayName}</p>
+              <p className="truncate" style={{ fontSize: 10, color: t.ink(0.4) }}>
+                {s.shared_interests.length > 0 ? s.shared_interests.join(", ") : (s.bio ?? `@${s.username}`)}
+              </p>
             </div>
-            <Link href="/explore" style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, background: ACCENT_GRADIENT, color: LIGHT.cream, fontWeight: 500, textDecoration: "none" }}>
-              Suivre
-            </Link>
+            {alreadyFollowed ? (
+              <span style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: t.black(0.06), color: t.ink(0.5), fontWeight: 500 }}>Suivi</span>
+            ) : (
+              <button type="button" onClick={() => handleFollow(s.id)} style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, background: ACCENT_GRADIENT, color: LIGHT.cream, fontWeight: 500, border: "none", cursor: "pointer" }}>
+                Suivre
+              </button>
+            )}
           </div>
         );
       })}
@@ -1187,7 +1204,11 @@ ${socialCardsCss}
           <Divider t={t} />
           <SectionLabel t={t}>Mes espaces</SectionLabel>
           <div className="grid grid-cols-2" style={{ gap: 6 }}>
-            {spaces.map((space) => {
+            {([
+              { icon: "\u{1F3B5}", title: "Musique", detail: `${(posts ?? []).filter((p) => p.type === "musique").length || "0"} titre${(posts ?? []).filter((p) => p.type === "musique").length !== 1 ? "s" : ""}`, filter: "Musique" },
+              { icon: "\u{1F4D6}", title: "Livres", detail: `${(posts ?? []).filter((p) => p.type === "livre").length || "0"} en cours`, href: "/livres" },
+              { icon: "\u{1F399}", title: "Podcasts", detail: podcastSubCount > 0 ? `${podcastSubCount} abonnement${podcastSubCount !== 1 ? "s" : ""}` : "Découvrir", href: "/podcasts" },
+            ] as { icon: string; title: string; detail: string; filter?: string; href?: string }[]).map((space) => {
               const content = <><span aria-hidden style={{ fontSize: 16 }}>{space.icon}</span><span className="mt-1 block" style={{ fontSize: 11, fontWeight: 500, color: t.text }}>{space.title}</span><span className="block" style={{ fontSize: 10, color: t.ink(0.4) }}>{space.detail}</span></>;
               const style: CSSProperties = { borderRadius: 10, padding: 10 };
               return space.href ? (
@@ -1287,7 +1308,7 @@ ${socialCardsCss}
           <TrendingTopics posts={posts} t={t} />
           <Divider t={t} />
           <SectionLabel t={t}>Profils suggérés</SectionLabel>
-          <SuggestedProfiles t={t} />
+          <SuggestedProfiles t={t} userId={userId} />
           <Divider t={t} />
           <SectionLabel t={t}>Raccourcis</SectionLabel>
           <div className="grid grid-cols-3" style={{ gap: 6 }}>
