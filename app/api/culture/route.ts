@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       if (!data) return NextResponse.json({ error: "Topic not found" }, { status: 404 });
 
       // Increment views
-      await supabase.rpc("increment_views", { topic_id: data.id }).catch(() => {});
+      try { await supabase.rpc("increment_views", { topic_id: data.id }); } catch { /* ignore */ }
 
       return NextResponse.json({ topic: data }, { headers: cache(600) });
     }
