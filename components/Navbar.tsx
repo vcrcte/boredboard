@@ -10,16 +10,14 @@ const memberLinks = [
   { label: "Board", href: "/dashboard", highlight: true },
   { label: "Culture", href: "/culture" },
   { label: "Actualités", href: "/actualites" },
-  { label: "Séries", href: "/series" },
-  { label: "Vidéos", href: "/videos" },
+  { label: "Séries & Vidéos", href: "/series" },
   { label: "Forum", href: "/forum" },
   { label: "Explorer", href: "/explore" },
 ];
 
 const visitorLinks = [
   { label: "Culture", href: "/culture" },
-  { label: "Séries", href: "/series" },
-  { label: "Vidéos", href: "/videos" },
+  { label: "Séries & Vidéos", href: "/series" },
   { label: "Forum", href: "/forum" },
   { label: "Explorer", href: "/explore" },
   { label: "Fonctionnalités", href: "/#fonctionnalites" },
