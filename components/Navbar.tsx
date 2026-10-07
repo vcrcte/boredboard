@@ -8,11 +8,13 @@ import { supabase } from "@/lib/supabase";
 
 const memberLinks = [
   { label: "Board", href: "/dashboard", highlight: true },
+  { label: "Culture", href: "/culture" },
   { label: "Actualités", href: "/actualites" },
   { label: "Explorer", href: "/explore" },
 ];
 
 const visitorLinks = [
+  { label: "Culture", href: "/culture" },
   { label: "Explorer", href: "/explore" },
   { label: "Fonctionnalités", href: "/#fonctionnalites" },
   { label: "Manifeste", href: "/#manifeste" },

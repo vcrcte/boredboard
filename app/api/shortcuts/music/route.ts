@@ -9,11 +9,6 @@ export async function POST(request: Request) {
 
     if (!token) return NextResponse.json({ error: 'Token requis' }, { status: 401 })
 
-    // Mapping direct token → user_id
-    const TOKEN_MAP: Record<string, string> = {
-      'boredboard-victor-2026': 'bfd2c43a-f905-4abc-ba26-66379e25a342'
-    }
-
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -26,16 +21,13 @@ export async function POST(request: Request) {
     )
 
     // Tokens from the /raccourci page are stored as their SHA-256 in shortcut_tokens.
-    let userId: string | undefined = TOKEN_MAP[token]
-    if (!userId) {
-      const hash = createHash('sha256').update(String(token)).digest('hex')
-      const { data } = await supabase
-        .from('shortcut_tokens')
-        .select('user_id')
-        .eq('token', hash)
-        .maybeSingle()
-      userId = data?.user_id
-    }
+    const hash = createHash('sha256').update(String(token)).digest('hex')
+    const { data } = await supabase
+      .from('shortcut_tokens')
+      .select('user_id')
+      .eq('token', hash)
+      .maybeSingle()
+    const userId: string | undefined = data?.user_id
 
     if (!userId) {
       return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
