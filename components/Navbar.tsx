@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -286,6 +286,7 @@ export function DarkModeToggle() {
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [name, setName] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -362,13 +363,18 @@ export default function Navbar() {
             <li key={link.label}>
               <Link
                 href={link.href}
-                className={`text-[13px] transition-colors ${
-                  "highlight" in link && link.highlight
-                    ? "font-semibold text-[#2A3560] hover:text-[#3D4F8C]"
-                    : "text-[#888780] hover:text-[#2A3560]"
+                className={`text-[13px] transition-colors relative ${
+                  pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href))
+                    ? "font-medium text-[#2A3560]"
+                    : "highlight" in link && link.highlight
+                      ? "font-semibold text-[#2A3560] hover:text-[#3D4F8C]"
+                      : "text-[#888780] hover:text-[#2A3560]"
                 }`}
               >
                 {link.label}
+                {(pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href))) && (
+                  <span className="absolute -bottom-[17px] left-1/2 -translate-x-1/2" style={{ width: 16, height: 2, background: "#C4A94A", borderRadius: 1 }} />
+                )}
               </Link>
             </li>
           ))}

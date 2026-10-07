@@ -1058,7 +1058,7 @@ ${socialCardsCss}
     return savedOnline ? "Préférences enregistrées." : "Enregistrées sur cet appareil seulement : la sauvegarde sur ton profil a échoué.";
   };
 
-  if (!session) return <div className="min-h-screen" style={{ background: t.cream }} />;
+  if (!session) return <div className="page-enter min-h-screen" style={{ background: t.cream }} />;
 
   const email = session.user.email;
   const displayName = profile?.name ?? email?.split("@")[0] ?? "";

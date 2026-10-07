@@ -87,6 +87,9 @@ const card: CSSProperties = {
   padding: 16,
 };
 
+/* Note: Components here use the inline 'card' style object for
+   legacy compatibility. New additions should use className="bb-card". */
+
 function timeAgo(date: string) {
   const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
   if (minutes < 1) return "à l'instant";
@@ -439,7 +442,7 @@ export default function ProfilePage() {
   );
 
   return (
-    <div className="flex h-screen flex-col" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
+    <div className="page-enter flex h-screen flex-col" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
       <style>{css}</style>
       <Navbar />
 

@@ -318,7 +318,7 @@ export default function CulturePage() {
 
   // ── Main listing view ──────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", background: t.cream }}>
+    <div className="page-enter" style={{ minHeight: "100vh", background: t.cream }}>
       <Navbar />
       <main style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 20px 80px" }}>
 
@@ -400,17 +400,8 @@ export default function CulturePage() {
             <button
               type="button"
               onClick={() => handleCategoryClick(null)}
-              style={{
-                fontSize: 13,
-                fontWeight: activeCategory === null ? 600 : 400,
-                color: activeCategory === null ? "white" : t.text,
-                background: activeCategory === null ? t.indigo : t.white,
-                border: `1px solid ${activeCategory === null ? t.indigo : t.border}`,
-                borderRadius: 20,
-                padding: "6px 16px",
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-              }}
+              className={activeCategory === null ? "bb-chip bb-chip-active" : "bb-chip bb-chip-inactive"}
+              style={{ fontSize: 13, padding: "6px 16px" }}
             >
               Tous
             </button>
@@ -439,7 +430,19 @@ export default function CulturePage() {
 
         {/* Archive grid */}
         {loading ? (
-          <div style={{ textAlign: "center", padding: 60, color: t.textMuted, fontSize: 14 }}>Chargement...</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{ background: t.white, borderRadius: 16, border: `1px solid ${t.border}`, padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+                <div className="flex items-center gap-2">
+                  <span className="bb-skeleton" style={{ width: 80, height: 22, borderRadius: 20 }} />
+                  <span className="bb-skeleton" style={{ width: 48, height: 14, borderRadius: 6 }} />
+                </div>
+                <span className="bb-skeleton" style={{ width: "85%", height: 18, borderRadius: 6 }} />
+                <span className="bb-skeleton" style={{ width: "100%", height: 14, borderRadius: 6 }} />
+                <span className="bb-skeleton" style={{ width: "60%", height: 14, borderRadius: 6 }} />
+              </div>
+            ))}
+          </div>
         ) : archive.length === 0 ? (
           <div style={{ textAlign: "center", padding: 60, color: t.textMuted, fontSize: 14 }}>
             {activeCategory ? `Aucun sujet dans la catégorie ${activeCategory}` : "Aucun sujet disponible"}

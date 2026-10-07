@@ -7,6 +7,13 @@ import Navbar, { Logo } from "@/components/Navbar";
 import { ensureProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
+const CREAM = "#F7F4EE";
+const GOLD = "#C4A94A";
+const TEXT = "#1C1A15";
+const DIM = "rgba(28,26,21,0.4)";
+const ERROR_RED = "#C0392B";
+const SUCCESS = "#3F8560";
+
 type Field = "name" | "email" | "password";
 
 const fields: {
@@ -81,8 +88,6 @@ export default function Signup() {
     const name = values.name.trim();
     setSubmitting(true);
 
-    // The name is also kept in the auth metadata, so the profile can still be
-    // created at first sign-in when it can't be written right now.
     const { data, error } = await supabase.auth.signUp({
       email,
       password: values.password,
@@ -95,16 +100,12 @@ export default function Signup() {
       return;
     }
 
-    // With email confirmation enabled, Supabase answers an already-registered
-    // address with a placeholder user that has no identities and no error.
     if (data.user.identities?.length === 0) {
       setFormError("Un compte existe déjà avec cette adresse email.");
       setSubmitting(false);
       return;
     }
 
-    // No session means the address must be confirmed first: RLS rejects any
-    // write to profiles until then, so the dashboard creates it at first sign-in.
     if (!data.session) {
       setNotice(
         "Compte créé. Confirme ton adresse via l'email que nous venons d'envoyer pour continuer.",
@@ -120,8 +121,6 @@ export default function Signup() {
       created_at: new Date().toISOString(),
     });
 
-    // Most likely the email prefix is already someone's username: retry with a
-    // unique one rather than leaving the account without a profile.
     if (upsertError) {
       const profileError = await ensureProfile(data.user, name);
       if (profileError) {
@@ -135,24 +134,24 @@ export default function Signup() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F4F0] font-sans text-[#1C1B2E] antialiased">
+    <div className="page-enter flex min-h-screen flex-col antialiased" style={{ background: CREAM, color: TEXT }}>
       <Navbar />
 
       <main className="flex flex-1 items-center justify-center px-5 py-12">
-        <div className="w-full max-w-[420px] rounded-[16px] border border-[#E8E8E8] bg-white p-10">
+        <div className="bb-card w-full" style={{ maxWidth: 420, padding: "40px 40px 36px" }}>
           <div className="text-center">
             <Logo className="text-[22px]" />
-            <h1 className="mt-5 font-serif text-[20px] text-[#1C1B2E]">
+            <h1 className="mt-5" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 20, fontWeight: 400, color: TEXT }}>
               Crée ton espace
             </h1>
-            <p className="mt-1.5 text-[13px] text-[#888780]">
+            <p className="mt-1.5" style={{ fontSize: 13, color: DIM }}>
               Rejoins une communauté de curieux
             </p>
           </div>
 
           <form onSubmit={handleSubmit} noValidate className="mt-7 flex flex-col gap-3">
             {fields.map((field) => {
-              const error = touched[field.name]
+              const fieldError = touched[field.name]
                 ? validate(field.name, values[field.name])
                 : null;
               return (
@@ -163,22 +162,24 @@ export default function Signup() {
                     value={values[field.name]}
                     placeholder={field.placeholder}
                     aria-label={field.placeholder}
-                    aria-invalid={error !== null}
-                    aria-describedby={error ? `${field.name}-error` : undefined}
+                    aria-invalid={fieldError !== null}
+                    aria-describedby={fieldError ? `${field.name}-error` : undefined}
                     autoComplete={field.autoComplete}
                     onChange={(event) =>
                       setValues({ ...values, [field.name]: event.target.value })
                     }
                     onBlur={() => setTouched({ ...touched, [field.name]: true })}
-                    className={`h-10 w-full rounded-[8px] border bg-white px-3 text-[13px] text-[#1C1B2E] outline-none transition-colors placeholder:text-[#888780] ${
-                      error
-                        ? "border-[#C0392B]"
-                        : "border-[#E8E8E8] focus:border-[#3D4F8C]"
-                    }`}
+                    className="bb-input"
+                    style={{
+                      height: 40,
+                      width: "100%",
+                      fontSize: 13,
+                      ...(fieldError ? { borderColor: ERROR_RED } : {}),
+                    }}
                   />
-                  {error && (
-                    <p id={`${field.name}-error`} className="mt-1.5 text-[12px] text-[#C0392B]">
-                      {error}
+                  {fieldError && (
+                    <p id={`${field.name}-error`} className="mt-1.5" style={{ fontSize: 12, color: ERROR_RED }}>
+                      {fieldError}
                     </p>
                   )}
                 </div>
@@ -188,31 +189,32 @@ export default function Signup() {
             <button
               type="submit"
               disabled={!isComplete || submitting}
-              className="mt-2 h-10 w-full rounded-[20px] bg-[#2A3560] text-[13px] font-medium text-white transition-colors hover:bg-[#3D4F8C] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#2A3560]"
+              className="bb-btn-primary mt-2"
+              style={{ height: 40, width: "100%", borderRadius: 20 }}
             >
               {submitting ? "Création…" : "Créer mon compte"}
             </button>
             {formError && (
-              <p role="alert" className="text-center text-[12px] text-[#C0392B]">
+              <p role="alert" className="text-center" style={{ fontSize: 12, color: ERROR_RED }}>
                 {formError}
               </p>
             )}
             {notice && (
-              <p role="status" className="text-center text-[12px] text-[#3F8560]">
+              <p role="status" className="text-center" style={{ fontSize: 12, color: SUCCESS }}>
                 {notice}
               </p>
             )}
           </form>
 
-          <div className="my-6 flex items-center gap-3 text-[12px] text-[#888780]">
-            <span className="h-px flex-1 bg-[#E8E8E8]" />
+          <div className="my-6 flex items-center gap-3" style={{ fontSize: 12, color: DIM }}>
+            <span className="h-px flex-1" style={{ background: "rgba(0,0,0,0.07)" }} />
             ou
-            <span className="h-px flex-1 bg-[#E8E8E8]" />
+            <span className="h-px flex-1" style={{ background: "rgba(0,0,0,0.07)" }} />
           </div>
 
-          <p className="text-center text-[13px] text-[#888780]">
+          <p className="text-center" style={{ fontSize: 13, color: DIM }}>
             Déjà un compte ?{" "}
-            <Link href="/login" className="text-[#C4A94A] hover:underline">
+            <Link href="/login" style={{ color: GOLD }} className="hover:underline">
               Se connecter
             </Link>
           </p>

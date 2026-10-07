@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Navbar, { Logo } from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
+const CREAM = "#F7F4EE";
+const TEXT = "#1C1A15";
+const DIM = "rgba(28,26,21,0.4)";
 const MIN_INTERESTS = 3;
 
 const topics = [
@@ -71,18 +74,18 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F4F0] font-sans text-[#1C1B2E] antialiased">
+    <div className="page-enter min-h-screen antialiased" style={{ background: CREAM, color: TEXT }}>
       <Navbar />
       <main className="mx-auto flex max-w-[560px] flex-col items-center px-5 py-14 text-center">
         <Logo className="text-[22px]" />
-        <h1 className="mt-10 font-serif text-[26px] leading-tight text-[#1C1B2E]">
+        <h1 className="mt-10" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 26, fontWeight: 400, lineHeight: 1.25, color: TEXT }}>
           Qu&apos;est-ce qui t&apos;intéresse ?
         </h1>
-        <p className="mt-2 text-[13px] text-[#888780]">
+        <p className="mt-2" style={{ fontSize: 13, color: DIM }}>
           Choisis au moins 3 sujets pour personnaliser ton feed
         </p>
 
-        <div className="mt-8 flex flex-wrap justify-center gap-2.5">
+        <div className="mt-8 flex flex-wrap justify-center" style={{ gap: 10 }}>
           {topics.map((topic) => {
             const isSelected = selected.includes(topic);
             return (
@@ -91,11 +94,12 @@ export default function Onboarding() {
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => toggle(topic)}
-                className={`rounded-full border px-4 py-2 text-[13px] transition-colors ${
-                  isSelected
-                    ? "border-[#2A3560] bg-[#2A3560] text-white"
-                    : "border-[#E8E8E8] bg-white text-[#1C1B2E] hover:border-[#2A3560]"
-                }`}
+                className={isSelected ? "bb-chip bb-chip-active" : "bb-chip bb-chip-inactive"}
+                style={{
+                  padding: "8px 18px",
+                  fontSize: 13,
+                  ...(isSelected ? {} : { border: "1px solid rgba(0,0,0,0.08)", background: "white" }),
+                }}
               >
                 {topic}
               </button>
@@ -107,15 +111,16 @@ export default function Onboarding() {
           type="button"
           onClick={handleContinue}
           disabled={selected.length < MIN_INTERESTS || saving}
-          className="mt-10 h-10 w-full max-w-[240px] rounded-[20px] bg-[#2A3560] text-[13px] font-medium text-white transition-colors hover:bg-[#3D4F8C] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#2A3560]"
+          className="bb-btn-primary mt-10"
+          style={{ height: 40, width: "100%", maxWidth: 240, borderRadius: 20 }}
         >
           {saving ? "Enregistrement…" : "Continuer"}
         </button>
-        <p className="mt-3 text-[12px] text-[#888780]">
+        <p className="mt-3" style={{ fontSize: 12, color: DIM }}>
           {selected.length} sélectionné{selected.length > 1 ? "s" : ""}
         </p>
         {error && (
-          <p role="alert" className="mt-2 text-[12px] text-[#C0392B]">
+          <p role="alert" className="mt-2" style={{ fontSize: 12, color: "#C0392B" }}>
             {error}
           </p>
         )}

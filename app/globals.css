@@ -2,21 +2,293 @@
 @tailwind components;
 @tailwind utilities;
 
-/* The site has a single light theme: no dark-mode override, so a reader with a
-   dark system theme never sees a black band when scrolling past the content. */
+/* ── Design tokens ──────────────────────────────────────────────────── */
 :root {
   --background: #f7f4ee;
   --foreground: #1c1a15;
+  --surface: #f0ebe1;
+  --surface-2: #eae3d6;
+  --white: #ffffff;
+  --indigo: #2a3560;
+  --indigo-light: #3d4f8c;
+  --gold: #c4a94a;
+  --text: #1c1a15;
+  --text-muted: rgba(28,26,21,0.5);
+  --text-dim: rgba(28,26,21,0.4);
+  --border: rgba(0,0,0,0.07);
+  --border-light: rgba(0,0,0,0.04);
+  --card-bg: #ffffff;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03);
+  --card-shadow-hover: 0 8px 25px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-pill: 20px;
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Smooth page transitions ────────────────────────────────────────── */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: page-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Fade in on scroll ──────────────────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger delays */
+.delay-1 { animation-delay: 50ms; }
+.delay-2 { animation-delay: 100ms; }
+.delay-3 { animation-delay: 150ms; }
+.delay-4 { animation-delay: 200ms; }
+
+/* ── Card system ────────────────────────────────────────────────────── */
+.bb-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.bb-card:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.bb-card-flat {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color var(--transition-fast);
+}
+
+.bb-card-flat:hover {
+  border-color: rgba(0,0,0,0.12);
+}
+
+/* ── Button system ──────────────────────────────────────────────────── */
+.bb-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--indigo);
+  color: var(--background);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.bb-btn-primary:hover { background: var(--indigo-light); }
+.bb-btn-primary:active { transform: scale(0.97); }
+.bb-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.bb-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.bb-btn-ghost:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--text);
+}
+
+/* ── Pill / chip system ─────────────────────────────────────────────── */
+.bb-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  user-select: none;
+}
+
+.bb-chip-active {
+  background: var(--indigo);
+  color: var(--background);
+}
+
+.bb-chip-inactive {
+  background: rgba(0,0,0,0.05);
+  color: var(--text-dim);
+}
+
+.bb-chip-inactive:hover {
+  background: rgba(0,0,0,0.08);
+  color: var(--text-muted);
+}
+
+/* ── Skeleton loading ───────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.bb-skeleton {
+  background: linear-gradient(90deg,
+    rgba(0,0,0,0.04) 25%,
+    rgba(0,0,0,0.08) 50%,
+    rgba(0,0,0,0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ── Section toggle (iOS-style segmented control) ───────────────────── */
+.bb-segmented {
+  display: flex;
+  gap: 4px;
+  background: rgba(0,0,0,0.04);
+  border-radius: 24px;
+  padding: 3px;
+}
+
+.bb-segmented button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 22px;
+  transition: all var(--transition-fast);
+}
+
+.bb-segmented .active {
+  background: var(--white);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.bb-segmented .inactive {
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.bb-segmented .inactive:hover {
+  color: var(--text-muted);
+}
+
+/* ── Scrollbar styling ──────────────────────────────────────────────── */
+.bb-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.bb-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.bb-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+.bb-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+/* ── Focus ring ─────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ── Selection color ────────────────────────────────────────────────── */
+::selection {
+  background: rgba(196,169,74,0.2);
+  color: var(--text);
+}
+
+/* ── Input styling ──────────────────────────────────────────────────── */
+.bb-input {
+  height: 42px;
+  width: 100%;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.bb-input::placeholder {
+  color: var(--text-dim);
+}
+
+.bb-input:focus {
+  outline: none;
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(42,53,96,0.08);
+}
+
+/* ── Divider ────────────────────────────────────────────────────────── */
+.bb-divider {
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Tooltip ────────────────────────────────────────────────────────── */
+.bb-tooltip {
+  position: relative;
+}
+
+.bb-tooltip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  background: var(--text);
+  color: var(--background);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.bb-tooltip:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .text-balance { text-wrap: balance; }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -191,7 +191,7 @@ export default function Explore() {
   const showInterest = activeInterest && !showSearch;
 
   return (
-    <div className="min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
+    <div className="page-enter min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
       <style>{`
         .ex-hover:hover { background: ${black(0.04)}; }
         .ex-input::placeholder { color: ${DIM}; }
@@ -210,8 +210,8 @@ export default function Explore() {
             value={query}
             onChange={(e) => { setQuery(e.target.value); setActiveInterest(null); }}
             placeholder="Chercher un profil..."
-            className="ex-input w-full"
-            style={{ background: WHITE, border: `1px solid ${black(0.08)}`, borderRadius: 12, padding: "12px 14px 12px 36px", fontSize: 13, color: TEXT, outline: "none" }}
+            className="bb-input w-full"
+            style={{ padding: "12px 14px 12px 36px", fontSize: 13 }}
           />
         </div>
 
@@ -225,10 +225,8 @@ export default function Explore() {
                   key={theme}
                   type="button"
                   onClick={() => activeInterest === theme ? setActiveInterest(null) : browseInterest(theme)}
-                  style={{
-                    fontSize: 12, padding: "6px 14px", borderRadius: 20, transition: "background-color 0.15s",
-                    ...(activeInterest === theme ? { background: INDIGO, color: CREAM } : { background: "#F0EBE1", color: ink(0.6) }),
-                  }}
+                  className={activeInterest === theme ? "bb-chip bb-chip-active" : "bb-chip bb-chip-inactive"}
+                  style={{ fontSize: 12, padding: "6px 14px" }}
                 >
                   {theme}
                 </button>

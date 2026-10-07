@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useState, useRef, type FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
@@ -17,22 +17,14 @@ import {
 } from "@/lib/forum";
 import { supabase } from "@/lib/supabase";
 
+/* ── design tokens ─────────────────────────────────────── */
 const CREAM = "#F7F4EE";
 const INDIGO = "#2A3560";
 const TEXT = "#1C1A15";
-const WHITE = "#FFFFFF";
 const GEORGIA = "Georgia, 'Times New Roman', serif";
 const ink = (a: number) => `rgba(28,26,21,${a})`;
-const black = (a: number) => `rgba(0,0,0,${a})`;
 const DIM = ink(0.4);
 const RED = "#DC2626";
-
-const card: CSSProperties = {
-  background: WHITE,
-  border: `1px solid ${black(0.07)}`,
-  borderRadius: 14,
-  overflow: "hidden",
-};
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Général": "#6B7280",
@@ -47,6 +39,100 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Suggestions": "#C4A94A",
 };
 
+/* ── fade-in hook ──────────────────────────────────────── */
+function useFadeIn(delay = 0, ready = true) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.opacity = "0";
+    el.style.transform = "translateY(12px)";
+    el.style.transition = "opacity .45s ease, transform .45s ease";
+    const t = setTimeout(() => {
+      el.style.opacity = "1";
+      el.style.transform = "translateY(0)";
+    }, 60 + delay * 50);
+    return () => clearTimeout(t);
+  }, [delay, ready]);
+  return ref;
+}
+
+/* ── loading skeleton ──────────────────────────────────── */
+function TopicSkeleton() {
+  return (
+    <div className="page-enter" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Back link skeleton */}
+      <span className="bb-skeleton" style={{ width: 120, height: 14, borderRadius: 6 }} />
+
+      {/* Post skeleton */}
+      <div className="bb-card" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="flex items-center gap-2">
+          <span className="bb-skeleton" style={{ width: 56, height: 18, borderRadius: 8 }} />
+          <span className="bb-skeleton" style={{ width: 80, height: 14, borderRadius: 6 }} />
+          <span className="bb-skeleton" style={{ width: 64, height: 14, borderRadius: 6 }} />
+        </div>
+        <span className="bb-skeleton" style={{ width: "75%", height: 22, borderRadius: 6 }} />
+        <span className="bb-skeleton" style={{ width: "100%", height: 14, borderRadius: 6 }} />
+        <span className="bb-skeleton" style={{ width: "90%", height: 14, borderRadius: 6 }} />
+        <span className="bb-skeleton" style={{ width: "60%", height: 14, borderRadius: 6 }} />
+      </div>
+
+      {/* Reply section skeleton */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <span className="bb-skeleton" style={{ width: 100, height: 16, borderRadius: 6 }} />
+        {[0, 1].map((i) => (
+          <div key={i} className="bb-card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="flex items-center gap-2">
+              <span className="bb-skeleton" style={{ width: 72, height: 14, borderRadius: 6 }} />
+              <span className="bb-skeleton" style={{ width: 48, height: 14, borderRadius: 6 }} />
+            </div>
+            <span className="bb-skeleton" style={{ width: "85%", height: 14, borderRadius: 6 }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── reply card ─────────────────────────────────────────── */
+function ReplyCard({ reply, isOwn, onDelete, index }: {
+  reply: ForumReply;
+  isOwn: boolean;
+  onDelete: () => void;
+  index: number;
+}) {
+  const ref = useFadeIn(index + 1);
+
+  return (
+    <div ref={ref} className="bb-card" style={{ padding: 16 }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2" style={{ fontSize: 11, color: DIM }}>
+          <span style={{ fontWeight: 500, color: ink(0.6) }}>{reply.author_name}</span>
+          <span style={{ opacity: 0.4 }}>·</span>
+          <span>{timeAgo(reply.created_at)}</span>
+        </div>
+        {isOwn && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="bb-btn-ghost"
+            style={{ fontSize: 10, color: DIM, padding: "4px 8px" }}
+          >
+            Supprimer
+          </button>
+        )}
+      </div>
+      <div
+        className="mt-2"
+        style={{ fontSize: 13, color: TEXT, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
+      >
+        {reply.body}
+      </div>
+    </div>
+  );
+}
+
+/* ── main ──────────────────────────────────────────────── */
 export default function TopicPage() {
   const router = useRouter();
   const params = useParams();
@@ -110,21 +196,30 @@ export default function TopicPage() {
     await load();
   };
 
-  if (!session || loading) return <div className="min-h-screen" style={{ background: CREAM }} />;
+  const postRef = useFadeIn(0, !!post);
+
+  if (!session) return <div className="min-h-screen" style={{ background: CREAM }} />;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen" style={{ background: CREAM, color: TEXT }}>
+        <Navbar />
+        <main className="mx-auto px-4 sm:px-6" style={{ maxWidth: 800, paddingBlock: 32 }}>
+          <TopicSkeleton />
+        </main>
+      </div>
+    );
+  }
 
   if (!post) {
     return (
-      <div className="min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
+      <div className="page-enter min-h-screen" style={{ background: CREAM, color: TEXT }}>
         <Navbar />
         <main className="mx-auto px-4 sm:px-6" style={{ maxWidth: 800, paddingBlock: 32 }}>
-          <div className="text-center" style={{ ...card, padding: 48 }}>
+          <div className="bb-card text-center" style={{ padding: 48 }}>
             <p style={{ fontSize: 28 }}>🔍</p>
             <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>Sujet introuvable</p>
-            <Link
-              href="/forum"
-              className="mt-4 inline-block transition hover:brightness-110"
-              style={{ background: INDIGO, color: CREAM, borderRadius: 20, padding: "9px 20px", fontSize: 12, fontWeight: 500 }}
-            >
+            <Link href="/forum" className="bb-btn-primary mt-4 inline-block">
               Retour au forum
             </Link>
           </div>
@@ -137,115 +232,101 @@ export default function TopicPage() {
   const isAuthor = userId === post.user_id;
 
   return (
-    <div className="min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
+    <div className="page-enter min-h-screen" style={{ background: CREAM, color: TEXT }}>
       <Navbar />
       <main className="mx-auto px-4 sm:px-6" style={{ maxWidth: 800, paddingBlock: 32 }}>
         {/* Back link */}
         <Link
           href="/forum"
-          className="inline-flex items-center gap-1 transition hover:underline"
-          style={{ fontSize: 12, color: DIM, marginBottom: 16 }}
+          className="inline-flex items-center gap-1"
+          style={{
+            fontSize: 12,
+            color: DIM,
+            marginBottom: 16,
+            transition: "color .15s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = TEXT)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = DIM)}
         >
           ← Retour au forum
         </Link>
 
         {/* Post */}
-        <article style={{ ...card, padding: 24 }}>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              style={{
-                fontSize: 10,
-                padding: "2px 8px",
-                borderRadius: 8,
-                background: `${catColor}14`,
-                color: catColor,
-                fontWeight: 500,
-              }}
-            >
-              {post.category}
-            </span>
-            <span style={{ fontSize: 11, color: DIM }}>{post.author_name}</span>
-            <span style={{ fontSize: 11, color: DIM }}>·</span>
-            <span style={{ fontSize: 11, color: DIM }}>{timeAgo(post.created_at)}</span>
-          </div>
-
-          <h1 className="mt-3" style={{ fontFamily: GEORGIA, fontSize: 22, fontWeight: 400, color: TEXT, lineHeight: 1.4 }}>
-            {post.title}
-          </h1>
-
-          <div
-            className="mt-4"
-            style={{ fontSize: 14, color: TEXT, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
-          >
-            {post.body}
-          </div>
-
-          {isAuthor && (
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={handleDeletePost}
-                disabled={deleting}
-                style={{ fontSize: 11, color: RED, background: "none", border: "none", cursor: "pointer" }}
+        <div ref={postRef}>
+          <article className="bb-card" style={{ padding: 24 }}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className="bb-chip"
+                style={{
+                  fontSize: 10,
+                  padding: "2px 10px",
+                  background: `${catColor}14`,
+                  color: catColor,
+                }}
               >
-                {deleting ? "Suppression…" : "Supprimer ce sujet"}
-              </button>
+                {post.category}
+              </span>
+              <span style={{ fontSize: 11, color: DIM, fontWeight: 500 }}>{post.author_name}</span>
+              <span style={{ fontSize: 11, color: DIM, opacity: 0.4 }}>·</span>
+              <span style={{ fontSize: 11, color: DIM }}>{timeAgo(post.created_at)}</span>
             </div>
-          )}
-        </article>
+
+            <h1 className="mt-3" style={{ fontFamily: GEORGIA, fontSize: 22, fontWeight: 400, color: TEXT, lineHeight: 1.4 }}>
+              {post.title}
+            </h1>
+
+            <div className="bb-divider" style={{ marginBlock: 16 }} />
+
+            <div style={{ fontSize: 14, color: TEXT, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+              {post.body}
+            </div>
+
+            {isAuthor && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleDeletePost}
+                  disabled={deleting}
+                  className="bb-btn-ghost"
+                  style={{ fontSize: 11, color: RED, padding: "6px 12px" }}
+                >
+                  {deleting ? "Suppression…" : "Supprimer ce sujet"}
+                </button>
+              </div>
+            )}
+          </article>
+        </div>
 
         {/* Replies */}
         <div className="mt-6">
-          <h2 style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>
+          <h2 style={{ fontSize: 14, fontWeight: 500, color: TEXT, letterSpacing: "0.01em" }}>
             {replies.length} réponse{replies.length !== 1 ? "s" : ""}
           </h2>
 
           <div className="mt-3 flex flex-col" style={{ gap: 8 }}>
-            {replies.map((reply) => (
-              <div key={reply.id} style={{ ...card, padding: 16 }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2" style={{ fontSize: 11, color: DIM }}>
-                    <span style={{ fontWeight: 500, color: TEXT }}>{reply.author_name}</span>
-                    <span>·</span>
-                    <span>{timeAgo(reply.created_at)}</span>
-                  </div>
-                  {userId === reply.user_id && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteReply(reply.id)}
-                      style={{ fontSize: 10, color: DIM, background: "none", border: "none", cursor: "pointer" }}
-                    >
-                      Supprimer
-                    </button>
-                  )}
-                </div>
-                <div
-                  className="mt-2"
-                  style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, whiteSpace: "pre-wrap" }}
-                >
-                  {reply.body}
-                </div>
-              </div>
+            {replies.map((reply, i) => (
+              <ReplyCard
+                key={reply.id}
+                reply={reply}
+                isOwn={userId === reply.user_id}
+                onDelete={() => handleDeleteReply(reply.id)}
+                index={i}
+              />
             ))}
           </div>
         </div>
 
         {/* Reply form */}
-        <form onSubmit={handleReply} className="mt-6" style={{ ...card, padding: 16 }}>
+        <form onSubmit={handleReply} className="bb-card mt-6" style={{ padding: 16 }}>
           <textarea
             placeholder="Votre réponse..."
             value={replyBody}
             onChange={(e) => setReplyBody(e.target.value)}
             rows={3}
+            className="bb-input"
             style={{
               width: "100%",
               fontSize: 13,
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: `1px solid ${black(0.1)}`,
-              background: WHITE,
-              color: TEXT,
-              outline: "none",
               resize: "vertical",
               lineHeight: 1.6,
               boxSizing: "border-box",
@@ -255,15 +336,7 @@ export default function TopicPage() {
             <button
               type="submit"
               disabled={submitting || !replyBody.trim()}
-              className="transition disabled:opacity-50"
-              style={{
-                background: INDIGO,
-                color: CREAM,
-                borderRadius: 20,
-                padding: "9px 24px",
-                fontSize: 12,
-                fontWeight: 500,
-              }}
+              className="bb-btn-primary"
             >
               {submitting ? "Envoi…" : "Répondre"}
             </button>

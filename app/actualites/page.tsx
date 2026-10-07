@@ -276,7 +276,7 @@ export default function Actualites() {
   const briefs = rest.slice(FULL_ARTICLES - 1);
 
   return (
-    <div className="min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
+    <div className="page-enter min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
       <style>{css}</style>
       <Navbar />
 

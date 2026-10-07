@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useState, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
@@ -14,22 +14,14 @@ import {
 } from "@/lib/forum";
 import { supabase } from "@/lib/supabase";
 
+/* ── design tokens ─────────────────────────────────────── */
 const CREAM = "#F7F4EE";
 const INDIGO = "#2A3560";
 const GOLD = "#C4A94A";
 const TEXT = "#1C1A15";
-const WHITE = "#FFFFFF";
 const GEORGIA = "Georgia, 'Times New Roman', serif";
 const ink = (a: number) => `rgba(28,26,21,${a})`;
-const black = (a: number) => `rgba(0,0,0,${a})`;
 const DIM = ink(0.4);
-
-const card: CSSProperties = {
-  background: WHITE,
-  border: `1px solid ${black(0.07)}`,
-  borderRadius: 14,
-  overflow: "hidden",
-};
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Général": "#6B7280",
@@ -44,76 +36,135 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Suggestions": GOLD,
 };
 
-function PostRow({ post }: { post: ForumPost }) {
-  const catColor = CATEGORY_COLORS[post.category] ?? INDIGO;
+/* ── fade-in hook ──────────────────────────────────────── */
+function useFadeIn(delay = 0) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.opacity = "0";
+    el.style.transform = "translateY(12px)";
+    el.style.transition = "opacity .45s ease, transform .45s ease";
+    const t = setTimeout(() => {
+      el.style.opacity = "1";
+      el.style.transform = "translateY(0)";
+    }, 60 + delay * 50);
+    return () => clearTimeout(t);
+  }, [delay]);
+  return ref;
+}
+
+/* ── loading skeleton ──────────────────────────────────── */
+function PostSkeleton() {
   return (
-    <Link
-      href={`/forum/${post.id}`}
-      className="block transition"
-      style={{
-        padding: "16px 20px",
-        borderBottom: `1px solid ${black(0.05)}`,
-      }}
-    >
+    <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              style={{
-                fontSize: 10,
-                padding: "2px 8px",
-                borderRadius: 8,
-                background: `${catColor}14`,
-                color: catColor,
-                fontWeight: 500,
-              }}
-            >
-              {post.category}
-            </span>
-            <h3
-              className="truncate"
-              style={{ fontSize: 14, fontWeight: 500, color: TEXT }}
-            >
-              {post.title}
-            </h3>
+        <div className="min-w-0 flex-1" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="flex items-center gap-2">
+            <span className="bb-skeleton" style={{ width: 56, height: 18, borderRadius: 8 }} />
+            <span className="bb-skeleton" style={{ width: "60%", height: 16, borderRadius: 6 }} />
           </div>
-          <p
-            className="mt-1 line-clamp-1"
-            style={{ fontSize: 12, color: DIM, lineHeight: 1.5 }}
-          >
-            {post.body}
-          </p>
-          <div className="mt-2 flex items-center gap-3" style={{ fontSize: 11, color: DIM }}>
-            <span>{post.author_name}</span>
-            <span>·</span>
-            <span>{timeAgo(post.created_at)}</span>
+          <span className="bb-skeleton" style={{ width: "85%", height: 14, borderRadius: 6 }} />
+          <div className="flex items-center gap-3">
+            <span className="bb-skeleton" style={{ width: 72, height: 12, borderRadius: 6 }} />
+            <span className="bb-skeleton" style={{ width: 48, height: 12, borderRadius: 6 }} />
           </div>
         </div>
-        <div
-          className="flex shrink-0 flex-col items-center justify-center"
-          style={{
-            minWidth: 48,
-            padding: "8px 0",
-            borderRadius: 10,
-            background: post.reply_count > 0 ? `${INDIGO}08` : "transparent",
-          }}
-        >
-          <span style={{ fontSize: 16, fontWeight: 600, color: post.reply_count > 0 ? INDIGO : DIM }}>
-            {post.reply_count}
-          </span>
-          <span style={{ fontSize: 9, color: DIM }}>
-            {post.reply_count === 1 ? "réponse" : "réponses"}
-          </span>
-        </div>
+        <span className="bb-skeleton" style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0 }} />
       </div>
-    </Link>
+    </div>
   );
 }
 
+function LoadingList() {
+  return (
+    <div className="bb-card" style={{ overflow: "hidden" }}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <PostSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/* ── post row ──────────────────────────────────────────── */
+function PostRow({ post, index }: { post: ForumPost; index: number }) {
+  const ref = useFadeIn(index);
+  const catColor = CATEGORY_COLORS[post.category] ?? INDIGO;
+
+  return (
+    <div ref={ref}>
+      <Link
+        href={`/forum/${post.id}`}
+        className="block"
+        style={{
+          padding: "16px 20px",
+          borderBottom: "1px solid rgba(0,0,0,0.04)",
+          transition: "background-color .15s ease",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.015)")}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className="bb-chip"
+                style={{
+                  fontSize: 10,
+                  padding: "2px 10px",
+                  background: `${catColor}14`,
+                  color: catColor,
+                }}
+              >
+                {post.category}
+              </span>
+              <h3
+                className="truncate"
+                style={{ fontSize: 14, fontWeight: 500, color: TEXT }}
+              >
+                {post.title}
+              </h3>
+            </div>
+            <p
+              className="mt-1 line-clamp-1"
+              style={{ fontSize: 12, color: DIM, lineHeight: 1.5 }}
+            >
+              {post.body}
+            </p>
+            <div className="mt-2 flex items-center gap-3" style={{ fontSize: 11, color: DIM }}>
+              <span style={{ fontWeight: 500, color: ink(0.55) }}>{post.author_name}</span>
+              <span style={{ opacity: 0.4 }}>·</span>
+              <span>{timeAgo(post.created_at)}</span>
+            </div>
+          </div>
+          <div
+            className="flex shrink-0 flex-col items-center justify-center"
+            style={{
+              minWidth: 48,
+              padding: "8px 0",
+              borderRadius: 10,
+              background: post.reply_count > 0 ? `${INDIGO}08` : "transparent",
+              transition: "background-color .15s ease",
+            }}
+          >
+            <span style={{ fontSize: 16, fontWeight: 600, color: post.reply_count > 0 ? INDIGO : DIM }}>
+              {post.reply_count}
+            </span>
+            <span style={{ fontSize: 9, color: DIM, letterSpacing: "0.02em" }}>
+              {post.reply_count === 1 ? "réponse" : "réponses"}
+            </span>
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+/* ── main ──────────────────────────────────────────────── */
 export default function Forum() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [posts, setPosts] = useState<ForumPost[]>([]);
+  const [posts, setPosts] = useState<ForumPost[] | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -161,27 +212,24 @@ export default function Forum() {
 
   if (!session) return <div className="min-h-screen" style={{ background: CREAM }} />;
 
+  const loading = posts === null;
+
   return (
-    <div className="min-h-screen" style={{ background: CREAM, color: TEXT, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
+    <div className="page-enter min-h-screen" style={{ background: CREAM, color: TEXT }}>
       <Navbar />
       <main className="mx-auto px-4 sm:px-6" style={{ maxWidth: 800, paddingBlock: 32 }}>
+        {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 style={{ fontFamily: GEORGIA, fontSize: 28, fontWeight: 400, color: TEXT }}>Forum</h1>
-            <p className="mt-1" style={{ fontSize: 13, color: DIM }}>Discutez, partagez, débattez avec la communauté</p>
+            <p className="mt-1" style={{ fontSize: 13, color: DIM, letterSpacing: "0.01em" }}>
+              Discutez, partagez, débattez avec la communauté
+            </p>
           </div>
           <button
             type="button"
             onClick={() => setShowNew(!showNew)}
-            className="shrink-0 transition hover:brightness-110"
-            style={{
-              background: INDIGO,
-              color: CREAM,
-              borderRadius: 20,
-              padding: "9px 20px",
-              fontSize: 12,
-              fontWeight: 500,
-            }}
+            className="bb-btn-primary shrink-0"
           >
             {showNew ? "Annuler" : "+ Nouveau sujet"}
           </button>
@@ -189,21 +237,14 @@ export default function Forum() {
 
         {/* New post form */}
         {showNew && (
-          <form onSubmit={handleSubmit} className="mt-5" style={{ ...card, padding: 20 }}>
+          <form onSubmit={handleSubmit} className="bb-card mt-5" style={{ padding: 20 }}>
             <div className="flex flex-col gap-3">
               <div className="flex gap-3">
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
-                  style={{
-                    fontSize: 12,
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: `1px solid ${black(0.1)}`,
-                    background: WHITE,
-                    color: TEXT,
-                    outline: "none",
-                  }}
+                  className="bb-input"
+                  style={{ fontSize: 12, padding: "8px 12px" }}
                 >
                   {FORUM_CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>{cat}</option>
@@ -215,16 +256,8 @@ export default function Forum() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   maxLength={150}
-                  className="flex-1"
-                  style={{
-                    fontSize: 13,
-                    padding: "8px 14px",
-                    borderRadius: 10,
-                    border: `1px solid ${black(0.1)}`,
-                    background: WHITE,
-                    color: TEXT,
-                    outline: "none",
-                  }}
+                  className="bb-input flex-1"
+                  style={{ fontSize: 13 }}
                 />
               </div>
               <textarea
@@ -232,14 +265,9 @@ export default function Forum() {
                 value={newBody}
                 onChange={(e) => setNewBody(e.target.value)}
                 rows={4}
+                className="bb-input"
                 style={{
                   fontSize: 13,
-                  padding: "10px 14px",
-                  borderRadius: 10,
-                  border: `1px solid ${black(0.1)}`,
-                  background: WHITE,
-                  color: TEXT,
-                  outline: "none",
                   resize: "vertical",
                   lineHeight: 1.6,
                 }}
@@ -248,15 +276,7 @@ export default function Forum() {
                 <button
                   type="submit"
                   disabled={submitting || !newTitle.trim() || !newBody.trim()}
-                  className="transition disabled:opacity-50"
-                  style={{
-                    background: INDIGO,
-                    color: CREAM,
-                    borderRadius: 20,
-                    padding: "9px 24px",
-                    fontSize: 12,
-                    fontWeight: 500,
-                  }}
+                  className="bb-btn-primary"
                 >
                   {submitting ? "Publication…" : "Publier"}
                 </button>
@@ -265,19 +285,12 @@ export default function Forum() {
           </form>
         )}
 
-        {/* Category filters */}
+        {/* Category chips */}
         <div className="mt-5 flex flex-wrap" style={{ gap: 6 }}>
           <button
             type="button"
             onClick={() => setCategoryFilter(null)}
-            style={{
-              fontSize: 11,
-              padding: "5px 14px",
-              borderRadius: 20,
-              ...(categoryFilter === null
-                ? { background: INDIGO, color: CREAM }
-                : { background: black(0.05), color: ink(0.5) }),
-            }}
+            className={categoryFilter === null ? "bb-chip bb-chip-active" : "bb-chip bb-chip-inactive"}
           >
             Tous
           </button>
@@ -286,14 +299,7 @@ export default function Forum() {
               key={cat}
               type="button"
               onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
-              style={{
-                fontSize: 11,
-                padding: "5px 14px",
-                borderRadius: 20,
-                ...(categoryFilter === cat
-                  ? { background: INDIGO, color: CREAM }
-                  : { background: black(0.05), color: ink(0.5) }),
-              }}
+              className={categoryFilter === cat ? "bb-chip bb-chip-active" : "bb-chip bb-chip-inactive"}
             >
               {cat}
             </button>
@@ -301,31 +307,36 @@ export default function Forum() {
         </div>
 
         {/* Posts list */}
-        <div className="mt-5" style={card}>
-          {posts.length === 0 ? (
-            <div className="text-center" style={{ padding: 48 }}>
-              <p style={{ fontSize: 28 }}>💬</p>
-              <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>
-                {categoryFilter ? "Aucun sujet dans cette catégorie" : "Aucun sujet pour le moment"}
-              </p>
-              <p className="mx-auto mt-1" style={{ fontSize: 12, color: DIM, maxWidth: 300, lineHeight: 1.5 }}>
-                Sois le premier à lancer une discussion !
-              </p>
-              {!showNew && (
-                <button
-                  type="button"
-                  onClick={() => setShowNew(true)}
-                  className="mt-4 transition hover:brightness-110"
-                  style={{ background: INDIGO, color: CREAM, borderRadius: 20, padding: "9px 20px", fontSize: 12, fontWeight: 500 }}
-                >
-                  Créer un sujet
-                </button>
-              )}
-            </div>
-          ) : (
-            posts.map((post) => <PostRow key={post.id} post={post} />)
-          )}
-        </div>
+        {loading ? (
+          <div className="mt-5">
+            <LoadingList />
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="bb-card mt-5 text-center" style={{ padding: 48 }}>
+            <p style={{ fontSize: 28 }}>💬</p>
+            <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>
+              {categoryFilter ? "Aucun sujet dans cette catégorie" : "Aucun sujet pour le moment"}
+            </p>
+            <p className="mx-auto mt-1" style={{ fontSize: 12, color: DIM, maxWidth: 300, lineHeight: 1.5 }}>
+              Sois le premier à lancer une discussion !
+            </p>
+            {!showNew && (
+              <button
+                type="button"
+                onClick={() => setShowNew(true)}
+                className="bb-btn-primary mt-4"
+              >
+                Créer un sujet
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="bb-card mt-5" style={{ overflow: "hidden" }}>
+            {posts.map((post, i) => (
+              <PostRow key={post.id} post={post} index={i} />
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );
