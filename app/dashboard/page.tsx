@@ -974,14 +974,32 @@ ${socialCardsCss}
 
   const loadPosts = useCallback(async () => {
     setFeedError(null);
-    const { data, error } = await supabase
-      .from("posts").select(POST_SELECT)
-      .not("content", "ilike", "%Morceau actuel%")
-      .not("content", "ilike", "%Test du Raccourci%")
-      .order("created_at", { ascending: false }).limit(20);
-    if (error) { setFeedError(error.message); return; }
-    const loaded = data as Post[];
+
+    // Try the personalised feed API first; fall back to chronological.
     const { data: auth } = await supabase.auth.getSession();
+    const token = auth.session?.access_token;
+    let loaded: Post[] | null = null;
+
+    if (token) {
+      try {
+        const res = await fetch("/api/feed", { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          loaded = (await res.json()) as Post[];
+        }
+      } catch { /* network error → fall back */ }
+    }
+
+    // Fallback: plain chronological query
+    if (!loaded) {
+      const { data, error } = await supabase
+        .from("posts").select(POST_SELECT)
+        .not("content", "ilike", "%Morceau actuel%")
+        .not("content", "ilike", "%Test du Raccourci%")
+        .order("created_at", { ascending: false }).limit(20);
+      if (error) { setFeedError(error.message); return; }
+      loaded = data as Post[];
+    }
+
     const viewerId = auth.session?.user.id;
     const byPost: Record<string, MyInteractions> = {};
     if (viewerId && loaded.length > 0) {
