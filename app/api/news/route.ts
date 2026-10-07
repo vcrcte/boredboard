@@ -54,7 +54,6 @@ async function getCached(cat: string, q: string): Promise<{ articles: CachedArti
       .select("articles, expires_at")
       .eq("category", cat);
 
-    // NULL vs empty string handling
     if (q) {
       query = query.eq("query", q);
     } else {
@@ -83,7 +82,6 @@ async function setCache(cat: string, q: string, articles: CachedArticle[]) {
       expires_at: expires,
     };
 
-    // Delete then insert to avoid unique index issues with NULL
     await supabase
       .from("cached_news")
       .delete()
@@ -97,12 +95,12 @@ async function setCache(cat: string, q: string, articles: CachedArticle[]) {
 }
 
 /* ── Fetch from NewsData API ───────────────────────────────── */
-async function fetchFromAPI(cat: string, q: string): Promise<CachedArticle[] | null> {
+async function fetchFromAPI(cat: string, q: string, lang = "fr"): Promise<CachedArticle[] | null> {
   const apiKey = process.env.NEWSDATA_API_KEY;
   if (!apiKey) return null;
 
   try {
-    const params = new URLSearchParams({ apikey: apiKey, language: "fr" });
+    const params = new URLSearchParams({ apikey: apiKey, language: lang });
     if (q) {
       params.set("q", q);
     } else {
@@ -145,14 +143,19 @@ export async function GET(request: Request) {
   const query = searchParams.get("q") || "";
   const cat = categoryMap[rawCategory] || "top";
 
+  const headers = {
+    "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+    "X-News-Version": "3",
+  };
+
   // 1. Check cache
   const cached = await getCached(cat, query);
 
   // 2. Fresh cache → serve immediately
-  if (cached?.fresh) {
+  if (cached?.fresh && cached.articles.length > 0) {
     return NextResponse.json(
       { status: "ok", articles: cached.articles, source: "cache" },
-      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } }
+      { headers }
     );
   }
 
@@ -160,27 +163,24 @@ export async function GET(request: Request) {
   const freshArticles = await fetchFromAPI(cat, query);
 
   if (freshArticles && freshArticles.length > 0) {
-    // Save to cache (fire-and-forget)
     setCache(cat, query, freshArticles);
-
     return NextResponse.json(
       { status: "ok", articles: freshArticles, source: "api" },
-      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } }
+      { headers }
     );
   }
 
-  // 4. API failed → serve stale cache
+  // 4. API failed → serve stale cache if available
   if (cached?.articles && cached.articles.length > 0) {
     return NextResponse.json(
       { status: "ok", articles: cached.articles, source: "stale-cache" },
-      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } }
+      { headers }
     );
   }
 
-  // 5. Nothing — return empty with debug info
+  // 5. Nothing at all — return ok with empty (client will retry)
   return NextResponse.json(
-    { status: "ok", articles: [], message: "Les actualités arrivent, réessayez dans quelques instants",
-      debug: { hasApiKey: !!process.env.NEWSDATA_API_KEY, keyLength: process.env.NEWSDATA_API_KEY?.length ?? 0 } },
-    { headers: { "Cache-Control": "no-cache" } }
+    { status: "ok", articles: [], source: "empty" },
+    { headers: { "Cache-Control": "no-cache", "X-News-Version": "3" } }
   );
 }
