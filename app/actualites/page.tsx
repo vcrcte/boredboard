@@ -10,7 +10,7 @@ import { ShareModal } from "@/components/NewsCard";
 import { newsTimeAgo, useNews, type NewsArticle, type NewsParams } from "@/lib/news";
 import { supabase } from "@/lib/supabase";
 
-const CREAM = "#F5F1E8";
+const CREAM = "#F7F4EE";
 const INDIGO = "#2A3560";
 const TEXT = "#1C1A15";
 const GEORGIA = "Georgia, 'Times New Roman', serif";

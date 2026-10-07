@@ -4,7 +4,7 @@ export default function NotFound() {
   return (
     <main
       className="page-enter flex min-h-screen flex-col items-center justify-center px-5 text-center"
-      style={{ background: "#F5F1E8" }}
+      style={{ background: "#F7F4EE" }}
     >
       <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 80, lineHeight: 1, color: "rgba(28,26,21,0.06)" }}>
         404

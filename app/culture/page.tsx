@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Navbar from "@/components/Navbar";
 
 // ── Theme ────────────────────────────────────────────────────────────────
-const LIGHT = { cream: "#F5F1E8", surface: "#EFEBE0", white: "#FFFFFF", text: "#1C1A15", textMuted: "rgba(28,26,21,0.5)", indigo: "#2A3560", gold: "#C4A94A", border: "rgba(0,0,0,0.06)", cardShadow: "0 2px 12px rgba(0,0,0,0.04)" };
+const LIGHT = { cream: "#F7F4EE", surface: "#F0EBE1", white: "#FFFFFF", text: "#1C1A15", textMuted: "rgba(28,26,21,0.5)", indigo: "#2A3560", gold: "#C4A94A", border: "rgba(0,0,0,0.06)", cardShadow: "0 2px 12px rgba(0,0,0,0.04)" };
 const DARK  = { cream: "#1A1A2E", surface: "#16213E", white: "#1E1E30", text: "#E8E6E1", textMuted: "rgba(232,230,225,0.5)", indigo: "#7B8CDE", gold: "#C4A94A", border: "rgba(255,255,255,0.08)", cardShadow: "0 2px 12px rgba(0,0,0,0.2)" };
 
 function useTheme() {
