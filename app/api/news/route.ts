@@ -177,9 +177,10 @@ export async function GET(request: Request) {
     );
   }
 
-  // 5. Nothing — return empty with a clear message
+  // 5. Nothing — return empty with debug info
   return NextResponse.json(
-    { status: "ok", articles: [], message: "Les actualités arrivent, réessayez dans quelques instants" },
+    { status: "ok", articles: [], message: "Les actualités arrivent, réessayez dans quelques instants",
+      debug: { hasApiKey: !!process.env.NEWSDATA_API_KEY, keyLength: process.env.NEWSDATA_API_KEY?.length ?? 0 } },
     { headers: { "Cache-Control": "no-cache" } }
   );
 }
