@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type NewsArticle = {
   source: { id: string | null; name: string };
   author: string | null;
   title: string;
   description: string | null;
-  /** First ~200 characters of the article body, as provided by NewsAPI. */
   content?: string | null;
   url: string;
   urlToImage: string | null;
@@ -15,24 +14,29 @@ export type NewsArticle = {
 export type NewsParams = { category?: string; q?: string };
 
 type NewsState = {
-  /** null while loading. */
   articles: NewsArticle[] | null;
   error: boolean;
 };
 
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [5_000, 15_000, 30_000]; // 5s, 15s, 30s
+
 /**
- * Loads articles from /api/news. Nothing is fetched while `enabled` is false,
- * and the request is repeated whenever the params change.
+ * Loads articles from /api/news with automatic retry on failure.
+ * Cache-first on the server means this almost never fails, but
+ * if it does, it retries up to 3 times with increasing delays.
  */
 export function useNews(params: NewsParams, enabled = true) {
   const [state, setState] = useState<NewsState>({ articles: null, error: false });
   const [attempt, setAttempt] = useState(0);
+  const retryCount = useRef(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout>>();
   const { category, q } = params;
 
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    setState({ articles: null, error: false });
+    setState((prev) => prev.articles ? prev : { articles: null, error: false });
 
     const search = new URLSearchParams();
     if (category) search.set("category", category);
@@ -42,18 +46,36 @@ export function useNews(params: NewsParams, enabled = true) {
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok || data.status !== "ok") throw new Error(data.message);
-        if (!cancelled) setState({ articles: data.articles, error: false });
+        if (!cancelled) {
+          setState({ articles: data.articles, error: false });
+          retryCount.current = 0; // reset on success
+        }
       })
       .catch(() => {
-        if (!cancelled) setState({ articles: null, error: true });
+        if (cancelled) return;
+
+        // Auto-retry with backoff
+        if (retryCount.current < MAX_RETRIES) {
+          const delay = RETRY_DELAYS[retryCount.current] ?? 30_000;
+          retryCount.current += 1;
+          retryTimer.current = setTimeout(() => {
+            if (!cancelled) setAttempt((c) => c + 1);
+          }, delay);
+        } else {
+          setState({ articles: null, error: true });
+        }
       });
 
     return () => {
       cancelled = true;
+      if (retryTimer.current) clearTimeout(retryTimer.current);
     };
   }, [category, q, enabled, attempt]);
 
-  const retry = useCallback(() => setAttempt((current) => current + 1), []);
+  const retry = useCallback(() => {
+    retryCount.current = 0;
+    setAttempt((c) => c + 1);
+  }, []);
 
   return { ...state, loading: enabled && !state.error && state.articles === null, retry };
 }
