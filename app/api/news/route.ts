@@ -135,7 +135,7 @@ async function fetchFromAPI(cat: string, q: string, lang = "fr"): Promise<Cached
         source: { name: a.source_name || a.source_id || "Source inconnue" },
         author: a.source_name ?? null,
       }));
-  } catch (e) {
+  } catch {
     return null;
   }
 }
