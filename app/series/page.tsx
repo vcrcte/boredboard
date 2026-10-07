@@ -27,7 +27,7 @@ import {
 } from "@/lib/videos";
 import { supabase } from "@/lib/supabase";
 
-const CREAM = "#F7F4EE";
+const CREAM = "#F5F1E8";
 const INDIGO = "#2A3560";
 const TEXT = "#1C1A15";
 const WHITE = "#FFFFFF";
@@ -176,12 +176,12 @@ function SeriesCard({
               {showStatus && (
                 <div className="absolute right-0 top-9 z-10" style={{ background: WHITE, borderRadius: 12, border: `1px solid ${black(0.08)}`, boxShadow: "0 12px 32px rgba(0,0,0,0.12)", minWidth: 150, overflow: "hidden" }}>
                   {(Object.keys(statusLabels) as SeriesWatchlistItem["status"][]).map((s) => (
-                    <button key={s} type="button" onClick={() => { onStatus(s); setShowStatus(false); }} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-[#F7F4EE]" style={{ fontSize: 12, color: statusLabels[s].color }}>
+                    <button key={s} type="button" onClick={() => { onStatus(s); setShowStatus(false); }} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-[#F5F1E8]" style={{ fontSize: 12, color: statusLabels[s].color }}>
                       {statusLabels[s].icon} {statusLabels[s].label}
                     </button>
                   ))}
                   <div style={{ height: 1, background: black(0.06) }} />
-                  <button type="button" onClick={() => { onRemove(); setShowStatus(false); }} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-[#F7F4EE]" style={{ fontSize: 12, color: ink(0.4) }}>
+                  <button type="button" onClick={() => { onRemove(); setShowStatus(false); }} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-[#F5F1E8]" style={{ fontSize: 12, color: ink(0.4) }}>
                     Retirer de ma liste
                   </button>
                 </div>
@@ -417,7 +417,7 @@ export default function SeriesAndVideos() {
           <>
             <div className="mt-5 flex" style={{ gap: 6 }}>
               {([
-                { value: "parcourir" as SeriesTab, label: "Parcourir", icon: "🔍" },
+                { value: "parcourir" as SeriesTab, label: "Parcourir", icon: "" },
                 { value: "maliste" as SeriesTab, label: "Ma liste", icon: "📋" },
               ]).map((t) => (
                 <button key={t.value} type="button" onClick={() => setSeriesTab(t.value)}
@@ -470,7 +470,7 @@ export default function SeriesAndVideos() {
               <>
                 {myListSources.length === 0 ? (
                   <div className="mt-8 text-center animate-fade-up" style={{ background: WHITE, border: `1px solid ${black(0.06)}`, borderRadius: 16, padding: "56px 24px" }}>
-                    <p style={{ fontSize: 36 }}>📺</p>
+                    <p style={{ fontSize: 24, color: "var(--bb-text-3)" }}>Aucun résultat</p>
                     <p className="mt-3" style={{ fontSize: 15, fontWeight: 600, color: TEXT }}>Ta liste est vide</p>
                     <p className="mx-auto mt-1.5" style={{ fontSize: 13, color: DIM, maxWidth: 300, lineHeight: 1.6 }}>
                       Parcours les séries et ajoute celles qui te tentent à ta liste.
@@ -497,8 +497,8 @@ export default function SeriesAndVideos() {
           <>
             <div className="mt-5 flex" style={{ gap: 6 }}>
               {([
-                { value: "parcourir" as VideoTab, label: "Parcourir", icon: "🔍" },
-                { value: "abonnements" as VideoTab, label: "Mes chaînes", icon: "📺" },
+                { value: "parcourir" as VideoTab, label: "Parcourir", icon: "" },
+                { value: "abonnements" as VideoTab, label: "Mes chaînes", icon: "" },
               ]).map((t) => (
                 <button key={t.value} type="button" onClick={() => setVideoTab(t.value)}
                   className={`bb-chip ${videoTab === t.value ? "bb-chip-active" : "bb-chip-inactive"}`} style={{ gap: 6 }}>
@@ -536,7 +536,7 @@ export default function SeriesAndVideos() {
               <>
                 {subscribedSources.length === 0 ? (
                   <div className="mt-8 text-center animate-fade-up" style={{ background: WHITE, border: `1px solid ${black(0.06)}`, borderRadius: 16, padding: "56px 24px" }}>
-                    <p style={{ fontSize: 36 }}>📺</p>
+                    <p style={{ fontSize: 24, color: "var(--bb-text-3)" }}>Aucun résultat</p>
                     <p className="mt-3" style={{ fontSize: 15, fontWeight: 600, color: TEXT }}>Aucune chaîne suivie</p>
                     <p className="mx-auto mt-1.5" style={{ fontSize: 13, color: DIM, maxWidth: 300, lineHeight: 1.6 }}>
                       Découvre les chaînes YouTube culturelles et suis celles qui te plaisent.

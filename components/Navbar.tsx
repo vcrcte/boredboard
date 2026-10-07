@@ -6,6 +6,83 @@ import { usePathname, useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
+/* ── SVG icons — no emojis ─────────────────────────────────────────── */
+function IconBell({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
+function IconSun({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  );
+}
+
+function IconMoon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+function IconMenu({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M4 7h16M4 12h12M4 17h8" />
+    </svg>
+  );
+}
+
+function IconX({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+function IconHeart({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  );
+}
+
+function IconComment({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function IconUser({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function IconChevron({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+/* ── Nav links ─────────────────────────────────────────────────────── */
 const memberLinks = [
   { label: "Board", href: "/dashboard", highlight: true },
   { label: "Culture", href: "/culture" },
@@ -29,35 +106,12 @@ const menuLinks = [
   { label: "Paramètres", href: "/settings" },
 ];
 
-function BoardIcon({ size = 24 }: { size?: number }) {
+/* ── Logo — Instrument Serif ───────────────────────────────────────── */
+export function Logo({ className = "" }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 80 80"
-      width={size}
-      height={size}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect x="4" y="4" width="72" height="72" rx="8" stroke="currentColor" strokeWidth="3.5" />
-      <rect x="14" y="14" width="20" height="20" rx="3" fill="#C4A94A" />
-      <rect x="40" y="14" width="26" height="8" rx="2" fill="currentColor" opacity="0.3" />
-      <rect x="40" y="28" width="18" height="6" rx="2" fill="currentColor" opacity="0.15" />
-      <rect x="14" y="42" width="52" height="8" rx="2" fill="currentColor" opacity="0.2" />
-      <rect x="14" y="56" width="38" height="8" rx="2" fill="#C4A94A" opacity="0.4" />
-      <circle cx="62" cy="60" r="6" fill="currentColor" opacity="0.15" />
-    </svg>
-  );
-}
-
-export function Logo({ className = "text-[18px]" }: { className?: string }) {
-  return (
-    <span className={`flex items-center gap-2 font-serif ${className} leading-none text-[#2A3560]`}>
-      <BoardIcon size={className.includes("text-[2") ? 28 : 22} />
-      <span>
-        <span className="text-[#2A3560]">Bored</span>
-        <span className="text-[#C4A94A]">Board</span>
-      </span>
+    <span className={`bb-display flex items-center gap-0 leading-none ${className}`} style={{ fontSize: 20 }}>
+      <span style={{ color: "#2A3560" }}>Bored</span>
+      <span style={{ color: "var(--bb-gold)" }}>Board</span>
     </span>
   );
 }
@@ -69,7 +123,7 @@ export function getInitials(name: string | null, email: string | undefined) {
   return (email ?? "?").slice(0, 1).toUpperCase();
 }
 
-// ── Notification types ───────────────────────────────────────────────────
+// ── Notification types ───────────────────────────────────────────────
 type Notification = {
   id: string;
   type: "like" | "comment" | "follow";
@@ -93,7 +147,6 @@ function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Load recent interactions (likes/comments on user's posts)
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
@@ -113,7 +166,6 @@ function NotificationBell({ userId }: { userId: string }) {
         .limit(20);
       if (cancelled || !interactions) return;
 
-      // Get profiles for actors
       const actorIds = [...new Set(interactions.map((i: { user_id: string }) => i.user_id))];
       const { data: profiles } = await supabase
         .from("profiles")
@@ -143,7 +195,6 @@ function NotificationBell({ userId }: { userId: string }) {
     return () => { cancelled = true; };
   }, [userId]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const onClick = (e: PointerEvent) => {
@@ -159,7 +210,6 @@ function NotificationBell({ userId }: { userId: string }) {
   }, [open]);
 
   const unread = notifications.filter((n) => !n.read).length;
-  const icon = "\u{1F514}";
 
   return (
     <div ref={ref} className="relative">
@@ -167,26 +217,20 @@ function NotificationBell({ userId }: { userId: string }) {
         type="button"
         onClick={() => {
           setOpen((o) => !o);
-          // Mark all as read
           if (!open) setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
         }}
         aria-label="Notifications"
-        className="relative flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[#F5F4F0]"
+        className="relative flex h-8 w-8 items-center justify-center rounded text-[--bb-text-3] transition-colors hover:text-[--bb-text] hover:bg-[--bb-surface]"
       >
-        <span style={{ fontSize: 16 }}>{icon}</span>
+        <IconBell size={16} />
         {unread > 0 && (
           <span
             className="absolute -right-0.5 -top-0.5 flex items-center justify-center"
             style={{
-              minWidth: 16,
-              height: 16,
-              borderRadius: 8,
-              background: "#D4537E",
-              color: "white",
-              fontSize: 9,
-              fontWeight: 700,
-              padding: "0 4px",
-              border: "2px solid white",
+              minWidth: 16, height: 16, borderRadius: 3,
+              background: "var(--bb-rose)", color: "white",
+              fontSize: 9, fontWeight: 700, padding: "0 4px",
+              fontFamily: "var(--font-ui)",
             }}
           >
             {unread > 9 ? "9+" : unread}
@@ -199,46 +243,45 @@ function NotificationBell({ userId }: { userId: string }) {
           aria-label="Notifications"
           className="absolute right-0 top-10 z-30"
           style={{
-            width: 320,
-            maxHeight: 400,
-            overflowY: "auto",
-            background: "white",
-            borderRadius: 14,
-            border: "1px solid rgba(0,0,0,0.08)",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
+            width: 340, maxHeight: 420, overflowY: "auto",
+            background: "var(--bb-white)",
+            borderRadius: "var(--bb-radius)",
+            border: "1px solid var(--bb-border-strong)",
+            boxShadow: "var(--bb-shadow-lg)",
           }}
         >
-          <div className="flex items-center justify-between" style={{ padding: "14px 16px 10px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#1C1A15" }}>Notifications</span>
+          <div className="flex items-center justify-between" style={{ padding: "14px 16px 10px", borderBottom: "1px solid var(--bb-border)" }}>
+            <span className="bb-ui" style={{ fontSize: 13, fontWeight: 600, color: "var(--bb-text)" }}>Notifications</span>
             {notifications.length > 0 && (
               <button
                 type="button"
                 onClick={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
-                style={{ fontSize: 11, color: "#2A3560", background: "none", border: "none", cursor: "pointer" }}
+                className="bb-ui"
+                style={{ fontSize: 11, color: "var(--bb-indigo)", background: "none", border: "none", cursor: "pointer" }}
               >
                 Tout marquer lu
               </button>
             )}
           </div>
           {notifications.length === 0 ? (
-            <div className="flex flex-col items-center" style={{ padding: "32px 16px", gap: 8 }}>
-              <span style={{ fontSize: 32 }}>{icon}</span>
-              <p style={{ fontSize: 13, color: "rgba(28,26,21,0.4)" }}>Aucune notification</p>
+            <div className="flex flex-col items-center" style={{ padding: "40px 16px", gap: 8 }}>
+              <IconBell size={28} />
+              <p style={{ fontSize: 13, color: "var(--bb-text-3)" }}>Aucune notification</p>
             </div>
           ) : (
             <div className="flex flex-col">
               {notifications.map((n) => (
                 <div
                   key={n.id}
-                  className="flex items-start gap-3 transition-colors hover:bg-[#F7F4EE]"
-                  style={{ padding: "10px 16px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}
+                  className="flex items-start gap-3 transition-colors hover:bg-[--bb-surface]"
+                  style={{ padding: "12px 16px", borderBottom: "1px solid var(--bb-border)" }}
                 >
-                  <span style={{ fontSize: 18, marginTop: 2 }}>
-                    {n.type === "like" ? "❤️" : n.type === "comment" ? "\u{1F4AC}" : "\u{1F464}"}
+                  <span className="mt-0.5 flex-shrink-0" style={{ color: n.type === "like" ? "var(--bb-rose)" : "var(--bb-indigo)" }}>
+                    {n.type === "like" ? <IconHeart size={14} /> : n.type === "comment" ? <IconComment size={14} /> : <IconUser size={14} />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p style={{ fontSize: 12, color: "#1C1A15", lineHeight: 1.4 }}>{n.message}</p>
-                    <p style={{ fontSize: 10, color: "rgba(28,26,21,0.35)", marginTop: 2 }}>{timeAgoShort(n.created_at)}</p>
+                    <p style={{ fontSize: 12, color: "var(--bb-text)", lineHeight: 1.5 }}>{n.message}</p>
+                    <p className="bb-ui" style={{ fontSize: 10, color: "var(--bb-text-4)", marginTop: 2 }}>{timeAgoShort(n.created_at)}</p>
                   </div>
                 </div>
               ))}
@@ -250,7 +293,7 @@ function NotificationBell({ userId }: { userId: string }) {
   );
 }
 
-// ── Dark mode toggle ─────────────────────────────────────────────────────
+// ── Dark mode toggle ─────────────────────────────────────────────────
 export function DarkModeToggle() {
   const [dark, setDark] = useState(false);
 
@@ -276,10 +319,9 @@ export function DarkModeToggle() {
       type="button"
       onClick={toggle}
       aria-label={dark ? "Mode clair" : "Mode sombre"}
-      className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[#F5F4F0]"
-      style={{ fontSize: 16 }}
+      className="flex h-8 w-8 items-center justify-center rounded text-[--bb-text-3] transition-colors hover:text-[--bb-text] hover:bg-[--bb-surface]"
     >
-      {dark ? "☀️" : "\u{1F319}"}
+      {dark ? <IconSun size={16} /> : <IconMoon size={16} />}
     </button>
   );
 }
@@ -295,9 +337,7 @@ export default function Navbar() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
     });
     return () => subscription.unsubscribe();
@@ -344,6 +384,7 @@ export default function Navbar() {
   }, [mobileOpen]);
 
   const navLinks = session === undefined ? [] : session ? memberLinks : visitorLinks;
+  const isActive = (href: string) => pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 
   const handleSignOut = async () => {
     setMenuOpen(false);
@@ -353,106 +394,146 @@ export default function Navbar() {
   };
 
   return (
-    <header className="border-b border-[#E8E8E8] bg-white">
-      <nav className="mx-auto grid h-[52px] max-w-[1120px] grid-cols-[1fr_auto_1fr] items-center px-6 md:px-10">
-        <Link href="/">
-          <Logo />
-        </Link>
-        <ul className="hidden items-center gap-8 md:flex">
-          {navLinks.map((link) => (
-            <li key={link.label}>
-              <Link
-                href={link.href}
-                className={`text-[13px] transition-colors relative ${
-                  pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href))
-                    ? "font-medium text-[#2A3560]"
-                    : "highlight" in link && link.highlight
-                      ? "font-semibold text-[#2A3560] hover:text-[#3D4F8C]"
-                      : "text-[#888780] hover:text-[#2A3560]"
-                }`}
-              >
-                {link.label}
-                {(pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href))) && (
-                  <span className="absolute -bottom-[17px] left-1/2 -translate-x-1/2" style={{ width: 16, height: 2, background: "#C4A94A", borderRadius: 1 }} />
-                )}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <div className="col-start-3 flex items-center justify-end gap-1.5">
-          {session !== undefined && (
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Ouvrir le menu"
-              aria-expanded={mobileOpen}
-              aria-controls="bb-mobile-menu"
-              className="flex h-8 w-8 items-center justify-center rounded-md text-[18px] text-[#2A3560] transition-colors hover:bg-[#F5F4F0] md:hidden"
-            >
-              ☰
-            </button>
-          )}
-          {session === null && (
-            <>
-              <Link href="/login" className="hidden rounded-md border border-[#E8E8E8] px-3.5 py-1.5 text-[13px] text-[#2A3560] transition-colors hover:border-[#2A3560] sm:block">
-                Connexion
-              </Link>
-              <Link href="/signup" className="rounded-md bg-[#2A3560] px-3.5 py-1.5 text-[13px] text-white transition-colors hover:bg-[#3D4F8C]">
-                Rejoindre
-              </Link>
-            </>
-          )}
-          {session && (
-            <>
-              <DarkModeToggle />
-              <NotificationBell userId={session.user.id} />
-              <div ref={menuRef} className="relative ml-1">
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen((o) => !o)}
-                  aria-label="Menu du compte"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2A3560] text-[11px] font-medium text-white transition-colors hover:bg-[#3D4F8C]"
-                >
-                  {getInitials(name, session.user.email)}
-                </button>
-                {menuOpen && (
-                  <div
-                    role="menu"
-                    className="absolute right-0 top-10 z-20 w-44 rounded-[10px] border border-[#E8E8E8] bg-white py-1.5"
-                  >
-                    {menuLinks.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        role="menuitem"
-                        onClick={() => setMenuOpen(false)}
-                        className="block px-3.5 py-2 text-[13px] text-[#1C1B2E] transition-colors hover:bg-[#F5F4F0]"
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
-                    <div className="my-1.5 h-px bg-[#E8E8E8]" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={handleSignOut}
-                      className="block w-full px-3.5 py-2 text-left text-[13px] text-[#888780] transition-colors hover:bg-[#F5F4F0] hover:text-[#2A3560]"
-                    >
-                      Se déconnecter
-                    </button>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </nav>
+    <>
+      {/* Gold accent line at the very top — signature BoredBoard element */}
+      <div style={{ height: 2, background: "linear-gradient(90deg, var(--bb-gold) 0%, var(--bb-gold-muted) 60%, transparent 100%)" }} />
 
+      <header style={{ background: "var(--bb-white)", borderBottom: "1px solid var(--bb-border)" }}>
+        <nav className="mx-auto flex h-[56px] max-w-[1140px] items-center justify-between px-6 md:px-10">
+          {/* Logo */}
+          <Link href="/" className="flex-shrink-0">
+            <Logo />
+          </Link>
+
+          {/* Desktop nav links — centered */}
+          <ul className="hidden items-center gap-1 md:flex">
+            {navLinks.map((link) => (
+              <li key={link.label}>
+                <Link
+                  href={link.href}
+                  className={`bb-ui relative px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                    isActive(link.href)
+                      ? "text-[--bb-indigo]"
+                      : "highlight" in link && link.highlight
+                        ? "text-[--bb-indigo]"
+                        : "text-[--bb-text-3] hover:text-[--bb-text]"
+                  }`}
+                >
+                  {link.label}
+                  {/* Active indicator — gold square dot, not a generic line */}
+                  {isActive(link.href) && (
+                    <span className="absolute -bottom-[18px] left-1/2 -translate-x-1/2 bb-gold-dot" />
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {/* Right side */}
+          <div className="flex items-center gap-1">
+            {/* Mobile hamburger */}
+            {session !== undefined && (
+              <button
+                type="button"
+                onClick={() => setMobileOpen(true)}
+                aria-label="Ouvrir le menu"
+                aria-expanded={mobileOpen}
+                aria-controls="bb-mobile-menu"
+                className="flex h-8 w-8 items-center justify-center rounded text-[--bb-indigo] transition-colors hover:bg-[--bb-surface] md:hidden"
+              >
+                <IconMenu size={18} />
+              </button>
+            )}
+
+            {/* Visitor actions */}
+            {session === null && (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/login"
+                  className="bb-ui hidden text-[13px] font-medium text-[--bb-text-3] transition-colors hover:text-[--bb-text] sm:block px-3 py-1.5"
+                >
+                  Connexion
+                </Link>
+                <Link
+                  href="/signup"
+                  className="bb-btn-primary"
+                  style={{ padding: "7px 18px", fontSize: 12 }}
+                >
+                  Rejoindre
+                </Link>
+              </div>
+            )}
+
+            {/* Member actions */}
+            {session && (
+              <div className="flex items-center gap-0.5">
+                <DarkModeToggle />
+                <NotificationBell userId={session.user.id} />
+
+                <div ref={menuRef} className="relative ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    aria-label="Menu du compte"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    className="bb-ui flex h-8 w-8 items-center justify-center rounded bg-[--bb-indigo] text-[11px] font-semibold text-white transition-colors hover:bg-[--bb-indigo-light]"
+                  >
+                    {getInitials(name, session.user.email)}
+                  </button>
+                  {menuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-10 z-20 w-48"
+                      style={{
+                        borderRadius: "var(--bb-radius)",
+                        border: "1px solid var(--bb-border-strong)",
+                        background: "var(--bb-white)",
+                        boxShadow: "var(--bb-shadow-lg)",
+                        padding: "4px 0",
+                      }}
+                    >
+                      {menuLinks.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          role="menuitem"
+                          onClick={() => setMenuOpen(false)}
+                          className="bb-ui block px-4 py-2.5 text-[13px] text-[--bb-text] transition-colors hover:bg-[--bb-surface]"
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                      <div className="my-1 mx-3" style={{ height: 1, background: "var(--bb-border)" }} />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleSignOut}
+                        className="bb-ui block w-full px-4 py-2.5 text-left text-[13px] text-[--bb-text-3] transition-colors hover:bg-[--bb-surface] hover:text-[--bb-text]"
+                      >
+                        Se déconnecter
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </nav>
+      </header>
+
+      {/* Mobile menu */}
       {mobileOpen && (
-        <div id="bb-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu" className="fixed inset-0 z-[60] flex flex-col bg-[#F7F4EE] md:hidden">
-          <div className="flex h-[52px] items-center justify-between border-b border-[#E8E8E8] bg-white px-6">
+        <div
+          id="bb-mobile-menu"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+          className="fixed inset-0 z-[60] flex flex-col md:hidden"
+          style={{ background: "var(--bb-bg)" }}
+        >
+          {/* Mobile header */}
+          <div className="flex h-[56px] items-center justify-between px-6" style={{ borderBottom: "1px solid var(--bb-border)", background: "var(--bb-white)" }}>
             <Link href="/" onClick={() => setMobileOpen(false)}>
               <Logo />
             </Link>
@@ -460,37 +541,62 @@ export default function Navbar() {
               type="button"
               onClick={() => setMobileOpen(false)}
               aria-label="Fermer le menu"
-              className="flex h-8 w-8 items-center justify-center rounded-md text-[18px] text-[#2A3560] transition-colors hover:bg-[#F0EBE1]"
+              className="flex h-8 w-8 items-center justify-center rounded text-[--bb-indigo] transition-colors hover:bg-[--bb-surface]"
             >
-              ✕
+              <IconX size={18} />
             </button>
           </div>
-          <ul className="flex flex-col px-6 py-6">
-            {[...navLinks, ...(session ? menuLinks : [])].map((link) => (
+
+          {/* Mobile links */}
+          <ul className="flex flex-col px-6 py-8">
+            {[...navLinks, ...(session ? menuLinks : [])].map((link, i) => (
               <li key={link.label}>
                 <Link
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`block border-b border-black/[0.06] py-4 font-serif text-[22px] ${
-                    "highlight" in link && link.highlight ? "text-[#2A3560]" : "text-[#1C1A15]"
+                  className={`bb-display block py-4 text-[26px] transition-colors ${
+                    isActive(link.href) ? "text-[--bb-indigo]" : "text-[--bb-text]"
                   }`}
+                  style={{
+                    borderBottom: "1px solid var(--bb-border)",
+                    animationDelay: `${i * 40}ms`,
+                  }}
                 >
                   {link.label}
                 </Link>
               </li>
             ))}
           </ul>
+
+          {/* Mobile bottom actions */}
           <div className="mt-auto flex flex-col gap-3 px-6 pb-10">
+            {/* Gold accent line */}
+            <div className="bb-gold-line mb-4" />
+
             {session ? (
-              <button type="button" onClick={handleSignOut} className="rounded-xl border border-black/[0.1] py-3 text-[14px] text-[#888780]">
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="bb-ui rounded border py-3 text-[14px] text-[--bb-text-3]"
+                style={{ borderColor: "var(--bb-border)" }}
+              >
                 Se déconnecter
               </button>
             ) : (
               <>
-                <Link href="/login" onClick={() => setMobileOpen(false)} className="rounded-xl border border-black/[0.1] py-3 text-center text-[14px] text-[#2A3560]">
+                <Link
+                  href="/login"
+                  onClick={() => setMobileOpen(false)}
+                  className="bb-ui rounded border py-3 text-center text-[14px] text-[--bb-indigo]"
+                  style={{ borderColor: "var(--bb-border)" }}
+                >
                   Connexion
                 </Link>
-                <Link href="/signup" onClick={() => setMobileOpen(false)} className="rounded-xl bg-[#2A3560] py-3 text-center text-[14px] text-white">
+                <Link
+                  href="/signup"
+                  onClick={() => setMobileOpen(false)}
+                  className="bb-btn-primary rounded py-3 text-center text-[14px]"
+                >
                   Rejoindre
                 </Link>
               </>
@@ -498,6 +604,6 @@ export default function Navbar() {
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 }

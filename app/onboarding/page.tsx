@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar, { Logo } from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
-const CREAM = "#F7F4EE";
+const CREAM = "#F5F1E8";
 const TEXT = "#1C1A15";
 const DIM = "rgba(28,26,21,0.4)";
 const MIN_INTERESTS = 3;
@@ -78,7 +78,7 @@ export default function Onboarding() {
       <Navbar />
       <main className="mx-auto flex max-w-[560px] flex-col items-center px-5 py-14 text-center">
         <Logo className="text-[22px]" />
-        <h1 className="mt-10" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 26, fontWeight: 400, lineHeight: 1.25, color: TEXT }}>
+        <h1 className="mt-10" style={{ fontFamily: "var(--font-display), Georgia, serif", fontSize: 26, fontWeight: 400, lineHeight: 1.25, color: TEXT }}>
           Qu&apos;est-ce qui t&apos;intéresse ?
         </h1>
         <p className="mt-2" style={{ fontSize: 13, color: DIM }}>

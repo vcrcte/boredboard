@@ -15,9 +15,9 @@ import { supabase } from "@/lib/supabase";
 // The hero keeps the dark palette; everything after it is on warm cream.
 const HERO_BG = "#0A0910";
 const HERO_TEXT = "#F0EEE8";
-const BG = "#F7F4EE";
-const SURFACE = "#F0EBE1";
-const SURFACE2 = "#EAE3D6";
+const BG = "#F5F1E8";
+const SURFACE = "#EFEBE0";
+const SURFACE2 = "#E8E2D4";
 const INDIGO = "#3D4F8C";
 const GOLD = "#C4A94A";
 const TEXT = "#1C1A15";
@@ -33,8 +33,8 @@ const black = (alpha: number) => `rgba(0,0,0,${alpha})`;
 const gold = (alpha: number) => `rgba(196,169,74,${alpha})`;
 const indigo = (alpha: number) => `rgba(61,79,140,${alpha})`;
 
-const serif: CSSProperties = { fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 400 };
-const sans: CSSProperties = { fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" };
+const serif: CSSProperties = { fontFamily: "var(--font-display), 'Instrument Serif', Georgia, serif", fontWeight: 400 };
+const sans: CSSProperties = { fontFamily: "var(--font-body), 'Inter', system-ui, sans-serif" };
 
 // Hover, active, focus and keyframe rules can't be expressed as inline styles.
 const css = `
@@ -56,7 +56,7 @@ html { scroll-behavior: smooth; }
 .bb-btn-gold:hover { filter: brightness(1.08); }
 .bb-btn-outline { color: ${GOLD}; }
 .bb-btn-outline:hover { background: ${gold(0.08)}; }
-.bb-dots { background-image: radial-gradient(${heroWhite(0.07)} 1px, transparent 1px); background-size: 28px 28px; }
+.bb-dots { background-image: radial-gradient(${heroWhite(0.07)} 1px, transparent 1px); background-size: 24px 24px; }
 .bb-pulse { animation: bb-pulse 2s infinite; }
 @keyframes bb-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.4); } }
 .bb-bounce { animation: bb-bounce 1.5s ease-in-out infinite; }
@@ -103,12 +103,12 @@ const stats = [
 ];
 
 const previewNav = [
-  { icon: "🏠", label: "Mon espace" },
-  { icon: "🧭", label: "Explorer" },
-  { icon: "🎵", label: "Musique" },
-  { icon: "📖", label: "Livres" },
-  { icon: "📰", label: "Actualités" },
-  { icon: "✉️", label: "Newsletter" },
+  { icon: "—", label: "Mon espace" },
+  { icon: "—", label: "Explorer" },
+  { icon: "—", label: "Musique" },
+  { icon: "—", label: "Livres" },
+  { icon: "—", label: "Actualités" },
+  { icon: "—", label: "Newsletter" },
 ];
 
 const previewContacts = [
@@ -121,10 +121,10 @@ const previewContacts = [
 const previewFilters = ["Tout", "Actualités", "Musique", "Livres", "Science", "Philo", "Art"];
 
 const previewSpaces = [
-  { icon: "🎵", title: "Musique", detail: "4 titres" },
-  { icon: "📖", title: "Livres", detail: "3 en cours" },
-  { icon: "🎙", title: "Podcasts", detail: "2 favoris" },
-  { icon: "📰", title: "Actualités", detail: "12 à lire" },
+  { icon: "♪", title: "Musique", detail: "4 titres" },
+  { icon: "§", title: "Livres", detail: "3 en cours" },
+  { icon: "¶", title: "Podcasts", detail: "2 favoris" },
+  { icon: "¤", title: "Actualités", detail: "12 à lire" },
 ];
 
 const previewTrends = [
@@ -265,7 +265,7 @@ function MiniAvatar({ initials, background, color, size = 20 }: { initials: stri
 
 function MiniPill({ children, background, color }: { children: ReactNode; background: string; color: string }) {
   return (
-    <span className="shrink-0" style={{ background, color, fontSize: 9, borderRadius: 20, padding: "2px 7px" }}>
+    <span className="shrink-0" style={{ background, color, fontSize: 9, borderRadius: 4, padding: "2px 7px" }}>
       {children}
     </span>
   );
@@ -288,9 +288,9 @@ function MiniActions({ likes, comments }: { likes: number; comments: number }) {
     <div className="mt-2 flex" style={{ gap: 10, fontSize: 10, color: DIM }}>
       <span>♥ {likes}</span>
       <span>·</span>
-      <span>💬 {comments}</span>
+      <span>• {comments}</span>
       <span>·</span>
-      <span>🔖</span>
+      <span>—</span>
     </div>
   );
 }
@@ -437,7 +437,7 @@ function FilterPills({ filters }: { filters: string[] }) {
           style={{
             fontSize: 10,
             padding: "3px 10px",
-            borderRadius: 20,
+            borderRadius: 4,
             background: index === 0 ? gold(0.15) : black(0.05),
             color: index === 0 ? GOLD : DIM,
           }}
@@ -560,7 +560,7 @@ function FeatureRow({
           <ul className="mt-4 flex flex-col" style={{ gap: 10 }}>
             {bullets.map((bullet) => (
               <li key={bullet} className="flex items-center gap-3">
-                <span className="shrink-0" style={{ width: 6, height: 6, background: GOLD }} />
+                <span className="shrink-0" style={{ width: 6, height: 6, background: GOLD, transform: "rotate(45deg)" }} />
                 <span style={{ fontSize: 13, color: DIM }}>{bullet}</span>
               </li>
             ))}
@@ -622,7 +622,7 @@ export default function Home() {
             <Link href="/login" className="bb-link" style={{ fontSize: 13 }}>
               Connexion
             </Link>
-            <Link href="/signup" className="bb-btn bb-btn-outline" style={{ border: `1px solid ${gold(0.5)}`, borderRadius: 20, padding: "6px 16px", fontSize: 13 }}>
+            <Link href="/signup" className="bb-btn bb-btn-outline" style={{ border: `1px solid ${gold(0.5)}`, borderRadius: 4, padding: "6px 16px", fontSize: 13 }}>
               Rejoindre
             </Link>
           </div>
@@ -667,13 +667,13 @@ export default function Home() {
                   color: GOLD,
                   fontSize: 10,
                   letterSpacing: "0.2em",
-                  borderRadius: 20,
+                  borderRadius: 4,
                   padding: "5px 16px",
                   marginBottom: 32,
                 }}
               >
                 <span className="bb-pulse" style={{ width: 6, height: 6, background: GOLD, borderRadius: "50%" }} />
-                BETA PRIVÉE · 2026
+                BETA PRIVÉE — 2026
               </p>
             </FadeUp>
 
@@ -707,7 +707,7 @@ export default function Home() {
 
             <FadeUp delay={650}>
               <div className="flex flex-wrap items-center justify-center" style={{ marginTop: 44, gap: 12 }}>
-                <Link href="/signup" className="bb-btn bb-btn-gold" style={{ fontSize: 13, fontWeight: 600, padding: "13px 28px", borderRadius: 24 }}>
+                <Link href="/signup" className="bb-btn bb-btn-gold" style={{ fontSize: 13, fontWeight: 600, padding: "13px 28px", borderRadius: 4 }}>
                   Rejoindre gratuitement
                 </Link>
                 <a href="#dashboard" className="bb-text-btn" style={{ fontSize: 13, padding: "13px 12px" }}>
@@ -769,7 +769,7 @@ export default function Home() {
             <div
               className="bb-tilt overflow-hidden"
               style={{
-                borderRadius: 24,
+                borderRadius: 4,
                 border: `1px solid ${CARD_BORDER}`,
                 boxShadow: `0 0 0 1px ${black(0.05)}, 0 60px 120px rgba(28,26,21,0.16), 0 0 80px ${indigo(0.06)}, 0 40px 120px ${indigo(0.12)}`,
               }}
@@ -781,7 +781,7 @@ export default function Home() {
                   ))}
                 </div>
                 <p className="absolute inset-x-0 text-center" style={{ fontSize: 11, color: text(0.2), fontFamily: "ui-monospace, Menlo, monospace" }}>
-                  <span aria-hidden className="mr-1.5" style={{ opacity: 0.6 }}>🔒</span>
+                  <span aria-hidden className="mr-1.5" style={{ opacity: 0.6 }}>●</span>
                   boredboard.com
                 </p>
               </div>
@@ -880,7 +880,7 @@ export default function Home() {
             <form
               onSubmit={handleJoin}
               className="bb-input-wrap mx-auto flex"
-              style={{ maxWidth: 400, border: `1px solid ${black(0.12)}`, background: white(0.8), borderRadius: 28, padding: 4 }}
+              style={{ maxWidth: 400, border: `1px solid ${black(0.12)}`, background: white(0.8), borderRadius: 6, padding: 4 }}
             >
               <input
                 type="email"
@@ -891,7 +891,7 @@ export default function Home() {
                 className="bb-input min-w-0 flex-1"
                 style={{ background: "transparent", border: "none", outline: "none", color: TEXT, padding: "0 20px", fontSize: 14 }}
               />
-              <button type="submit" className="bb-btn bb-btn-gold shrink-0" style={{ fontWeight: 600, borderRadius: 24, padding: "12px 22px", fontSize: 13 }}>
+              <button type="submit" className="bb-btn bb-btn-gold shrink-0" style={{ fontWeight: 600, borderRadius: 4, padding: "12px 22px", fontSize: 13 }}>
                 Rejoindre
               </button>
             </form>

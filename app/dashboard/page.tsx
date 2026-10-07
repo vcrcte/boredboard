@@ -44,7 +44,7 @@ import { supabase } from "@/lib/supabase";
 
 // ── Theme tokens (light/dark) ─────────────────────────────────────────────
 const LIGHT = {
-  cream: "#F7F4EE", surface: "#F0EBE1", white: "#FFFFFF",
+  cream: "#F5F1E8", surface: "#EFEBE0", white: "#FFFFFF",
   text: "#1C1A15", indigo: "#2A3560",
   ink: (a: number) => `rgba(28,26,21,${a})`,
   black: (a: number) => `rgba(0,0,0,${a})`,
@@ -148,7 +148,7 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
   { icon: "\u{1F3B5}", label: "Musique", filter: "Musique" },
   { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
-  { icon: "✉️", label: "Newsletter", href: "/newsletter" },
+  { icon: "", label: "Newsletter", href: "/newsletter" },
 ];
 
 const spaces: { icon: string; title: string; detail: string; filter?: string; href?: string }[] = [
@@ -772,7 +772,7 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
         className="w-full" style={{ maxWidth: 520, background: t.white, borderRadius: 20, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div className="flex items-center">
           <h2 id="new-post-title" style={{ fontSize: 16, fontWeight: 600, color: t.text }}>Nouveau post</h2>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="db-play ml-auto" style={{ fontSize: 18 }}>✕</button>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="db-play ml-auto" style={{ fontSize: 18 }}>×</button>
         </div>
 
         <div className="mt-4 flex flex-wrap" style={{ gap: 8 }}>
@@ -1118,7 +1118,7 @@ ${socialCardsCss}
           className={`${sidebarOpen ? "fixed inset-y-0 left-0 z-50 block w-[280px] max-w-[85vw] shadow-xl" : "hidden"} overflow-y-auto md:static md:z-auto md:block md:w-auto md:max-w-none md:shadow-none`}
           style={{ background: t.white, borderRight: `1px solid ${t.black(0.07)}`, padding: "20px 16px" }}
           onClick={(e) => { if ((e.target as HTMLElement).closest("a, button")) setSidebarOpen(false); }}>
-          <button type="button" aria-label="Fermer le menu" className="db-hover mb-3 ml-auto flex md:hidden" style={{ borderRadius: 8, padding: "2px 8px", fontSize: 18, color: t.ink(0.5) }}>✕</button>
+          <button type="button" aria-label="Fermer le menu" className="db-hover mb-3 ml-auto flex md:hidden" style={{ borderRadius: 8, padding: "2px 8px", fontSize: 18, color: t.ink(0.5) }}>×</button>
           <div style={{ background: t.white, borderRadius: 16, overflow: "hidden", boxShadow: t.warmShadow }}>
             <div style={{ height: 48, background: ACCENT_GRADIENT }} />
             <div style={{ padding: "0 14px 14px", marginTop: -24 }}>
@@ -1188,7 +1188,7 @@ ${socialCardsCss}
               <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 6 }}>
                 <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu" aria-expanded={sidebarOpen} aria-controls="db-sidebar"
                   className="db-hover flex shrink-0 items-center md:hidden"
-                  style={{ border: `1px solid ${t.black(0.1)}`, borderRadius: 20, padding: "3px 12px", fontSize: 16, color: t.ink(0.6) }}>☰</button>
+                  style={{ border: `1px solid ${t.black(0.1)}`, borderRadius: 20, padding: "3px 12px", fontSize: 16, color: t.ink(0.6) }}>≡</button>
                 {filters.map((item) => (
                   <button key={item} type="button" onClick={() => setFilter(item)} aria-pressed={filter === item}
                     className={`shrink-0 ${filter === item ? "" : "db-pill"}`}
@@ -1335,7 +1335,7 @@ ${socialCardsCss}
             style={{ background: t.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "75vh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.12)" }}>
             <div className="flex items-center justify-between" style={{ padding: "16px 20px 8px", borderBottom: `1px solid ${t.black(0.06)}` }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: t.text }}>⚡ Utilitaires</span>
-              <button type="button" onClick={() => setUtilityOpen(false)} aria-label="Fermer" className="db-play" style={{ fontSize: 16 }}>✕</button>
+              <button type="button" onClick={() => setUtilityOpen(false)} aria-label="Fermer" className="db-play" style={{ fontSize: 16 }}>×</button>
             </div>
             <div style={{ padding: "12px 20px 24px" }}>
               <div className="grid grid-cols-4" style={{ gap: 8, marginBottom: 16 }}>

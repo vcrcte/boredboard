@@ -15,7 +15,7 @@ import {
 import { supabase } from "@/lib/supabase";
 
 /* ── design tokens ─────────────────────────────────────── */
-const CREAM = "#F7F4EE";
+const CREAM = "#F5F1E8";
 const INDIGO = "#2A3560";
 const GOLD = "#C4A94A";
 const TEXT = "#1C1A15";
@@ -313,7 +313,7 @@ export default function Forum() {
           </div>
         ) : posts.length === 0 ? (
           <div className="bb-card mt-5 text-center" style={{ padding: 48 }}>
-            <p style={{ fontSize: 28 }}>💬</p>
+            <p className="bb-display-italic" style={{ fontSize: 18, color: "var(--bb-text-3)" }}>Aucun sujet</p>
             <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>
               {categoryFilter ? "Aucun sujet dans cette catégorie" : "Aucun sujet pour le moment"}
             </p>

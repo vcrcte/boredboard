@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Navbar, { Logo } from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
-const CREAM = "#F7F4EE";
+const CREAM = "#F5F1E8";
 const GOLD = "#C4A94A";
 const TEXT = "#1C1A15";
 const DIM = "rgba(28,26,21,0.4)";
@@ -51,7 +51,7 @@ export default function Login() {
         <div className="bb-card w-full" style={{ maxWidth: 420, padding: "40px 40px 36px" }}>
           <div className="text-center">
             <Logo className="text-[22px]" />
-            <h1 className="mt-5" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 20, fontWeight: 400, color: TEXT }}>
+            <h1 className="mt-5" style={{ fontFamily: "var(--font-display), Georgia, serif", fontSize: 20, fontWeight: 400, color: TEXT }}>
               Bon retour
             </h1>
             <p className="mt-1.5" style={{ fontSize: 13, color: DIM }}>
