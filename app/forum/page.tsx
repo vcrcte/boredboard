@@ -313,7 +313,7 @@ export default function Forum() {
           </div>
         ) : posts.length === 0 ? (
           <div className="bb-card mt-5 text-center" style={{ padding: 48 }}>
-            <p style={{ fontSize: 28 }}>💬</p>
+            <p style={{ fontSize: 28 }}>◈</p>
             <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>
               {categoryFilter ? "Aucun sujet dans cette catégorie" : "Aucun sujet pour le moment"}
             </p>

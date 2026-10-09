@@ -217,7 +217,7 @@ export default function TopicPage() {
         <Navbar />
         <main className="mx-auto px-4 sm:px-6" style={{ maxWidth: 800, paddingBlock: 32 }}>
           <div className="bb-card text-center" style={{ padding: 48 }}>
-            <p style={{ fontSize: 28 }}>🔍</p>
+            <p style={{ fontSize: 28 }}>◎</p>
             <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>Sujet introuvable</p>
             <Link href="/forum" className="bb-btn-primary mt-4 inline-block">
               Retour au forum

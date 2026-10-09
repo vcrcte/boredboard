@@ -204,7 +204,7 @@ export default function Explore() {
 
         {/* Search bar */}
         <div className="relative mb-6">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ fontSize: 14, color: DIM }}>🔍</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ fontSize: 14, color: DIM }}>◎</span>
           <input
             type="search"
             value={query}
@@ -318,7 +318,7 @@ export default function Explore() {
               </div>
             ) : suggested.length === 0 ? (
               <div className="text-center" style={{ ...card, padding: 32 }}>
-                <p style={{ fontSize: 24 }}>🧭</p>
+                <p style={{ fontSize: 24 }}>✦</p>
                 <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>Pas encore de suggestions</p>
                 <p className="mx-auto mt-1" style={{ fontSize: 12, color: DIM, maxWidth: 280, lineHeight: 1.5 }}>
                   Ajoute tes centres d&apos;intérêt dans les paramètres pour découvrir des profils qui te ressemblent.

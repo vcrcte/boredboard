@@ -134,7 +134,7 @@ export function NowListeningCard() {
   if (listeners !== null && listeners.length === 0) {
     return (
       <article className="db-card" style={card}>
-        <Header>🎵 En ce moment dans ton réseau</Header>
+        <Header>♪ En ce moment dans ton réseau</Header>
         <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
           Connecte ton compte Last.fm pour voir ce que ton réseau écoute en temps réel.
         </p>
@@ -148,7 +148,7 @@ export function NowListeningCard() {
   const playing = (listeners ?? []).filter((listener) => listener.track.nowPlaying).length;
   return (
     <article className="db-card" style={card}>
-      <Header>🎵 En ce moment dans ton réseau</Header>
+      <Header>♪ En ce moment dans ton réseau</Header>
       {listeners === null ? (
         <div aria-hidden className="mt-3 flex animate-pulse" style={{ gap: 10 }}>
           {[0, 1, 2].map((index) => (
@@ -253,7 +253,7 @@ export function ReadingNowCard() {
     return (
       <article className="db-card" style={card}>
         <div className="flex items-center justify-between">
-          <Header>📖 Ce que lit ton réseau</Header>
+          <Header>📕 Ce que lit ton réseau</Header>
           <Link href="/livres" className="sc-link" style={{ fontSize: 11 }}>
             Mes livres →
           </Link>
@@ -268,7 +268,7 @@ export function ReadingNowCard() {
   return (
     <article className="db-card" style={card}>
       <div className="flex items-center justify-between">
-        <Header>📖 Ce que lit ton réseau</Header>
+        <Header>📕 Ce que lit ton réseau</Header>
         <Link href="/livres" className="sc-link" style={{ fontSize: 11 }}>
           Mes livres →
         </Link>
@@ -335,7 +335,7 @@ export function ReadingNowCard() {
 export function DiscussionsCard() {
   return (
     <article className="db-card" style={card}>
-      <Header>💬 Dans les discussions</Header>
+      <Header>◈ Dans les discussions</Header>
       <p className="mt-3" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>
         Les commentaires sur les articles partagés apparaîtront ici.
       </p>
@@ -369,7 +369,7 @@ export function MarketsFlashCard() {
   return (
     <article className="db-card" style={card}>
       <div className="flex items-center justify-between">
-        <Header>📈 Flash marchés</Header>
+        <Header>↗ Flash marchés</Header>
         <Link href="/actualites?rubrique=bourse" className="sc-link" style={{ fontSize: 11 }}>
           Voir la bourse →
         </Link>

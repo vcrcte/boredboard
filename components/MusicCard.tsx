@@ -30,7 +30,7 @@ function Cover({ src, size, radius }: { src: string | null; size: number; radius
     />
   ) : (
     <span aria-hidden className="flex shrink-0 items-center justify-center" style={{ width: size, height: size, borderRadius: radius, background: "#EEEDFE", fontSize: size * 0.36 }}>
-      🎵
+      ♪
     </span>
   );
 }

@@ -141,8 +141,8 @@ function PodcastCard({
 type Tab = "parcourir" | "abonnements";
 
 const tabs: { value: Tab; label: string; icon: string }[] = [
-  { value: "parcourir", label: "Parcourir", icon: "🔍" },
-  { value: "abonnements", label: "Mes abonnements", icon: "🎧" },
+  { value: "parcourir", label: "Parcourir", icon: "◎" },
+  { value: "abonnements", label: "Mes abonnements", icon: "◎" },
 ];
 
 export default function Podcasts() {
@@ -317,7 +317,7 @@ export default function Podcasts() {
               </div>
             ) : subscribedSources.length === 0 ? (
               <div className="mt-6 text-center" style={{ ...card, padding: 48 }}>
-                <p style={{ fontSize: 28 }}>🎧</p>
+                <p style={{ fontSize: 28 }}>◎</p>
                 <p className="mt-2" style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>Aucun abonnement</p>
                 <p className="mx-auto mt-1" style={{ fontSize: 12, color: DIM, maxWidth: 300, lineHeight: 1.5 }}>
                   Explore les podcasts disponibles et abonne-toi à ceux qui t&apos;intéressent.
@@ -351,7 +351,7 @@ export default function Podcasts() {
         <section className="mt-12">
           <div style={{ ...card, background: `${INDIGO}08`, borderColor: `${INDIGO}15` }}>
             <div className="flex items-start gap-3">
-              <span style={{ fontSize: 20 }}>💡</span>
+              <span style={{ fontSize: 20 }}>✧</span>
               <div>
                 <p style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>Comment ça marche ?</p>
                 <p className="mt-1" style={{ fontSize: 12, color: DIM, lineHeight: 1.6 }}>

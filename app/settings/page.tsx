@@ -208,7 +208,7 @@ export default function Settings() {
           <Section title="Intégrations musicales">
             <div style={{ background: "#FFFFFF", border: `1px solid ${black(0.07)}`, borderRadius: 14, padding: 18 }}>
               <p style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>
-                <span aria-hidden>🎵</span> Last.fm
+                <span aria-hidden>♪</span> Last.fm
               </p>
               <p className="mt-1" style={{ fontSize: 12, color: DIM, lineHeight: 1.5 }}>
                 Connecte ton compte Last.fm pour partager ta musique en temps réel

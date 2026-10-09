@@ -151,8 +151,8 @@ function Actions({ likes, comments }: { likes: number; comments: number }) {
   return (
     <div className="mt-3 flex" style={{ gap: 4 }}>
       {button("like", "Aimer", <>♥ {likes + (active.like ? 1 : 0)}</>, { color: "#D4537E", background: "rgba(212,83,126,0.06)" })}
-      {button("comment", "Commenter", <>💬 {comments}</>, indigoActive)}
-      {button("save", "Sauvegarder", "🔖", indigoActive, "ml-auto")}
+      {button("comment", "Commenter", <>◈ {comments}</>, indigoActive)}
+      {button("save", "Sauvegarder", "⊞", indigoActive, "ml-auto")}
     </div>
   );
 }
@@ -359,7 +359,7 @@ export default function ProfilePage() {
         <ul>
           {bookRows.map((book, index) => (
             <li key={book.id} className="flex items-center" style={{ padding: "8px 0", gap: 10, borderBottom: index < bookRows.length - 1 ? `1px solid ${black(0.05)}` : "none" }}>
-              <span className="flex shrink-0 items-center justify-center" style={{ width: 28, height: 38, background: spineColors[index % spineColors.length], borderRadius: 3, fontSize: 11 }}>📖</span>
+              <span className="flex shrink-0 items-center justify-center" style={{ width: 28, height: 38, background: spineColors[index % spineColors.length], borderRadius: 3, fontSize: 11 }}>📕</span>
               <div className="min-w-0">
                 <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{book.title}</p>
                 <p className="truncate" style={{ fontSize: 11, color: DIM }}>{book.author}</p>
@@ -396,7 +396,7 @@ export default function ProfilePage() {
           {trackRows.map((track, index) => (
             <li key={track.key} className="flex items-center" style={{ padding: "8px 0", gap: 10, borderBottom: index < trackRows.length - 1 ? `1px solid ${black(0.05)}` : "none" }}>
               <span className="flex shrink-0 items-center justify-center" style={{ width: 32, height: 32, background: track.color, borderRadius: 7, fontSize: 12 }}>
-                {track.nowPlaying ? "🔊" : "🎵"}
+                {track.nowPlaying ? "▶" : "♪"}
               </span>
               <div className="min-w-0">
                 <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{track.title}</p>
@@ -625,13 +625,13 @@ export default function ProfilePage() {
               <SectionLabel>Raccourcis</SectionLabel>
               <div className="flex flex-col" style={{ gap: 4 }}>
                 <Link href="/explore" className="pf-hover flex items-center" style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}>
-                  <span aria-hidden style={{ fontSize: 14 }}>🧭</span> Explorer des profils
+                  <span aria-hidden style={{ fontSize: 14 }}>✦</span> Explorer des profils
                 </Link>
                 <Link href="/settings" className="pf-hover flex items-center" style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}>
-                  <span aria-hidden style={{ fontSize: 14 }}>🔧</span> Paramètres
+                  <span aria-hidden style={{ fontSize: 14 }}>⊙</span> Paramètres
                 </Link>
                 <Link href="/dashboard" className="pf-hover flex items-center" style={{ padding: "8px 10px", borderRadius: 10, fontSize: 12, gap: 8, color: ink(0.6) }}>
-                  <span aria-hidden style={{ fontSize: 14 }}>🏠</span> Mon dashboard
+                  <span aria-hidden style={{ fontSize: 14 }}>◉</span> Mon dashboard
                 </Link>
               </div>
             </>

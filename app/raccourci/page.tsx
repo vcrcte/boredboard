@@ -173,7 +173,7 @@ export default function Raccourci() {
                 className="rc-main"
                 style={{ display: "block", background: INDIGO, color: CREAM, borderRadius: 14, padding: "14px 28px", fontSize: 15, fontWeight: 500, textAlign: "center", textDecoration: "none" }}
               >
-                📲 Installer le Raccourci
+                ↓ Installer le Raccourci
               </a>
               <p className="mt-2 text-center" style={{ fontSize: 11, color: DIM, fontStyle: "italic" }}>Ouvre ce lien sur ton iPhone</p>
             </section>
@@ -192,7 +192,7 @@ export default function Raccourci() {
                 className="rc-dark"
                 style={{ display: "block", background: TEXT, color: CREAM, borderRadius: 14, padding: "14px 28px", fontSize: 15, fontWeight: 500, textAlign: "center", textDecoration: "none" }}
               >
-                📤 Installer le Raccourci Partage
+                ↗ Installer le Raccourci Partage
               </a>
               <div className="mt-3 flex flex-wrap justify-center" style={{ gap: 6 }}>
                 {sharePlatforms.map((item) => (
@@ -263,11 +263,11 @@ export default function Raccourci() {
                 La prochaine fois que tu écoutes un titre sur Apple Music, ouvre le Raccourci et il sera partagé automatiquement dans ton feed BoredBoard.
               </p>
               <div className="mt-3 flex items-center justify-center" style={{ gap: 4 }} aria-hidden>
-                <span style={{ background: "rgba(252,60,68,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>🎵</span>
+                <span style={{ background: "rgba(252,60,68,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>♪</span>
                 <span style={{ fontSize: 12, color: DIM }}>→</span>
-                <span style={{ background: "rgba(42,53,96,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>⚡</span>
+                <span style={{ background: "rgba(42,53,96,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>△</span>
                 <span style={{ fontSize: 12, color: DIM }}>→</span>
-                <span style={{ background: "rgba(196,169,74,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>📱</span>
+                <span style={{ background: "rgba(196,169,74,0.08)", borderRadius: 8, padding: 8, fontSize: 16 }}>◉</span>
               </div>
               <p className="mt-2 text-center" style={{ fontSize: 10, color: DIM }}>Apple Music → Raccourci → BoredBoard</p>
             </section>

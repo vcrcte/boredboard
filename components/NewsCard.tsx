@@ -210,7 +210,7 @@ export default function NewsCard({
             aria-pressed={saved}
             style={{ opacity: saved ? 1 : 0.45 }}
           >
-            🔖
+            ⊞
           </button>
         </div>
       </div>

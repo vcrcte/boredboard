@@ -234,7 +234,7 @@ function NotificationBell({ userId }: { userId: string }) {
                   style={{ padding: "10px 16px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}
                 >
                   <span style={{ fontSize: 18, marginTop: 2 }}>
-                    {n.type === "like" ? "❤️" : n.type === "comment" ? "\u{1F4AC}" : "\u{1F464}"}
+                    {n.type === "like" ? "♥" : n.type === "comment" ? "\u{1F4AC}" : "\u{1F464}"}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p style={{ fontSize: 12, color: "#1C1A15", lineHeight: 1.4 }}>{n.message}</p>
@@ -279,7 +279,7 @@ export function DarkModeToggle() {
       className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[#F5F4F0]"
       style={{ fontSize: 16 }}
     >
-      {dark ? "☀️" : "\u{1F319}"}
+      {dark ? "○" : "\u{1F319}"}
     </button>
   );
 }

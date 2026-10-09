@@ -143,13 +143,13 @@ const categories: { label: string; tone: keyof typeof tones; filter?: string }[]
 ];
 
 const navItems: { icon: string; label: string; filter?: string; href?: string }[] = [
-  { icon: "\u{1F3E0}", label: "Mon espace", filter: "Tout" },
-  { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
-  { icon: "\u{1F3B5}", label: "Musique", filter: "Musique" },
-  { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
-  { icon: "\u{1F399}", label: "Podcasts", href: "/podcasts" },
-  { icon: "✉️", label: "Newsletter", href: "/newsletter" },
-  { icon: "\u{1F4F0}", label: "Actualités", href: "/actualites" },
+  { icon: "◉", label: "Mon espace", filter: "Tout" },
+  { icon: "✦", label: "Explorer", href: "/explore" },
+  { icon: "♪", label: "Musique", filter: "Musique" },
+  { icon: "📕", label: "Livres", href: "/livres" },
+  { icon: "◎", label: "Podcasts", href: "/podcasts" },
+  { icon: "↗", label: "Newsletter", href: "/newsletter" },
+  { icon: "▣", label: "Actualités", href: "/actualites" },
 ];
 
 // spaces is now computed inside the component with dynamic counts
@@ -423,10 +423,10 @@ function ComposePrompt({ initials, displayName, onOpen, t }: { initials: string;
       </div>
       <div className="mt-3 flex items-center justify-around" style={{ borderTop: `1px solid ${t.black(0.05)}`, paddingTop: 10 }}>
         {[
-          { icon: "\u{1F3B5}", label: "Musique", color: "#6B3FD4" },
-          { icon: "\u{1F4D6}", label: "Livre", color: "#3B6D11" },
-          { icon: "\u{1F4F0}", label: "Article", color: "#2A3560" },
-          { icon: "\u{1F4AD}", label: "Réflexion", color: "#993556" },
+          { icon: "♪", label: "Musique", color: "#6B3FD4" },
+          { icon: "📕", label: "Livre", color: "#3B6D11" },
+          { icon: "▣", label: "Article", color: "#2A3560" },
+          { icon: "¶", label: "Réflexion", color: "#993556" },
         ].map((item) => (
           <button key={item.label} type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }}
             className="db-hover flex items-center" style={{ gap: 6, fontSize: 12, color: item.color, padding: "4px 10px", borderRadius: 8, fontWeight: 500 }}>
@@ -1207,7 +1207,7 @@ ${socialCardsCss}
                 ))}
                 <button type="button" onClick={() => setCustomizerOpen(true)} className="db-hover ml-auto flex shrink-0 items-center"
                   style={{ gap: 5, border: `1px solid ${t.black(0.1)}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, color: t.ink(0.5) }}>
-                  <span aria-hidden>⚙️</span> Personnaliser
+                  <span aria-hidden>✧</span> Personnaliser
                 </button>
               </div>
             </div>
@@ -1256,7 +1256,7 @@ ${socialCardsCss}
 
           <button type="button" onClick={() => setUtilityOpen(true)} aria-label="Ouvrir le panneau utilitaire"
             className="db-hover absolute bottom-6 right-[72px] z-20 flex items-center justify-center md:hidden"
-            style={{ background: t.white, width: 40, height: 40, borderRadius: "50%", fontSize: 16, border: `1px solid ${t.black(0.1)}`, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>⚡</button>
+            style={{ background: t.white, width: 40, height: 40, borderRadius: "50%", fontSize: 16, border: `1px solid ${t.black(0.1)}`, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>≡</button>
           <button type="button" onClick={() => setModalOpen(true)} aria-label="Nouveau post" title="Nouveau post"
             className="db-fab absolute bottom-6 right-6 z-20 flex items-center justify-center"
             style={{ color: LIGHT.cream, width: 48, height: 48, borderRadius: "50%", fontSize: 22, boxShadow: "0 4px 20px rgba(42,53,96,0.3)" }}>+</button>
@@ -1266,9 +1266,9 @@ ${socialCardsCss}
         <aside className="hidden overflow-y-auto md:block" style={{ background: t.white, borderLeft: `1px solid ${t.black(0.04)}`, padding: "20px 16px" }}>
           <div className="flex items-center" style={{ gap: 6, marginBottom: 16 }}>
             {[
-              { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
-              { icon: "\u{1F3B5}", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
-              { icon: "\u{1F4D6}", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
+              { icon: "∎", value: String(posts?.length ?? 0), label: "posts" },
+              { icon: "♪", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
+              { icon: "📕", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
             ].map((stat) => (
               <div key={stat.label} className="flex-1 text-center" style={{ background: t.cream, borderRadius: 12, padding: "8px 4px" }}>
                 <p style={{ fontSize: 15, fontWeight: 700, color: t.text, lineHeight: 1 }}>{stat.value}</p>
@@ -1305,7 +1305,7 @@ ${socialCardsCss}
             className="fixed inset-x-0 bottom-0 z-50 md:hidden"
             style={{ background: t.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "75vh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.12)" }}>
             <div className="flex items-center justify-between" style={{ padding: "16px 20px 8px", borderBottom: `1px solid ${t.black(0.06)}` }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: t.text }}>⚡ Utilitaires</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: t.text }}>≡ Utilitaires</span>
               <button type="button" onClick={() => setUtilityOpen(false)} aria-label="Fermer" className="db-play" style={{ fontSize: 16 }}>✕</button>
             </div>
             <div style={{ padding: "12px 20px 24px" }}>
@@ -1314,7 +1314,7 @@ ${socialCardsCss}
                   { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
                   { icon: "\u{1F3B5}", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
                   { icon: "\u{1F4D6}", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
-                  { icon: "\u{1F4AC}", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
+                  { icon: "¶", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
                 ].map((stat) => (
                   <div key={stat.label} className="text-center" style={{ background: t.cream, borderRadius: 10, padding: "10px 4px" }}>
                     <p style={{ fontSize: 14 }} aria-hidden>{stat.icon}</p>
@@ -1325,8 +1325,8 @@ ${socialCardsCss}
               </div>
               <div className="grid grid-cols-2" style={{ gap: 8 }}>
                 {[
-                  { icon: "➕", label: "Nouveau post", action: () => { setUtilityOpen(false); setModalOpen(true); } },
-                  { icon: "⚙️", label: "Personnaliser", action: () => { setUtilityOpen(false); setCustomizerOpen(true); } },
+                  { icon: "+", label: "Nouveau post", action: () => { setUtilityOpen(false); setModalOpen(true); } },
+                  { icon: "✧", label: "Personnaliser", action: () => { setUtilityOpen(false); setCustomizerOpen(true); } },
                 ].map((s) => (
                   <button key={s.label} type="button" onClick={s.action} className="db-hover flex items-center justify-center"
                     style={{ background: t.cream, padding: "12px 10px", borderRadius: 12, fontSize: 12, gap: 6, color: t.ink(0.6) }}>
@@ -1336,9 +1336,9 @@ ${socialCardsCss}
               </div>
               <div className="mt-2 grid grid-cols-3" style={{ gap: 8 }}>
                 {[
-                  { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
-                  { icon: "\u{1F464}", label: "Profil", href: "/profile" },
-                  { icon: "\u{1F527}", label: "Paramètres", href: "/settings" },
+                  { icon: "✦", label: "Explorer", href: "/explore" },
+                  { icon: "◑", label: "Profil", href: "/profile" },
+                  { icon: "⊙", label: "Paramètres", href: "/settings" },
                 ].map((link) => (
                   <Link key={link.label} href={link.href} onClick={() => setUtilityOpen(false)} className="db-hover flex flex-col items-center"
                     style={{ background: t.cream, padding: "12px 8px", borderRadius: 12, fontSize: 11, gap: 4, color: t.ink(0.6) }}>

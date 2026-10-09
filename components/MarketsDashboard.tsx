@@ -529,7 +529,7 @@ function buildInsights(markets: MarketsResponse, now: Date) {
     const rising = cac.changePercent >= 0;
     const mover = rising ? sorted[0] : sorted[sorted.length - 1];
     insights.push({
-      icon: rising ? "📈" : "📉",
+      icon: rising ? "↗" : "↘",
       text: rising
         ? `Le CAC 40 progresse de ${pct(cac.changePercent)} — porté par ${mover.name} (${formatPercent(mover.changePercent)}).`
         : `Le CAC 40 recule de ${pct(cac.changePercent)} — pénalisé par ${mover.name} (${formatPercent(mover.changePercent)}).`,
@@ -539,7 +539,7 @@ function buildInsights(markets: MarketsResponse, now: Date) {
   const eurusd = markets.fx.find((quote) => quote.symbol === "EURUSD=X");
   if (eurusd) {
     insights.push({
-      icon: "⚡",
+      icon: "△",
       text:
         eurusd.changePercent <= -0.5
           ? `Le dollar s'apprécie face à l'euro (EUR/USD ${formatPercent(eurusd.changePercent)}).`
@@ -552,7 +552,7 @@ function buildInsights(markets: MarketsResponse, now: Date) {
   const gold = markets.commodities.find((quote) => quote.symbol === "GC=F");
   if (gold) {
     insights.push({
-      icon: gold.changePercent > 0 ? "📈" : "📉",
+      icon: gold.changePercent > 0 ? "↗" : "↘",
       text:
         gold.changePercent > 0
           ? `L'or confirme son statut de valeur refuge (${formatPercent(gold.changePercent)}).`
@@ -562,7 +562,7 @@ function buildInsights(markets: MarketsResponse, now: Date) {
 
   const days = daysToJobsReport(now);
   insights.push({
-    icon: "🔍",
+    icon: "◎",
     text: `Prochain événement macro : rapport sur l'emploi américain ${days === 0 ? "aujourd'hui" : `dans ${days}j`}.`,
   });
 
@@ -967,7 +967,7 @@ export default function MarketsDashboard({ session }: { session: Session }) {
               {userAlerts.map((alert) => (
                 <li key={alert.id} className="mb-2 flex items-center justify-between gap-2" style={{ background: BG, borderRadius: 8, padding: 9 }}>
                   <span className="min-w-0 truncate" style={{ fontSize: 11, color: TEXT }}>
-                    <span aria-hidden>🔔</span> {alert.label}
+                    <span aria-hidden>●</span> {alert.label}
                   </span>
                   <button type="button" onClick={() => handleRemoveAlert(alert.id)} aria-label="Supprimer" className="mk-hover shrink-0" style={{ fontSize: 11, color: DIM }}>✕</button>
                 </li>

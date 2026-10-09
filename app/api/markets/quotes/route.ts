@@ -87,9 +87,9 @@ const GROUPS: Record<keyof MarketGroups, { kind: QuoteKind; instruments: Instrum
   sectors: {
     kind: "stock",
     instruments: [
-      { symbol: "XLF", name: "Finance", detail: "🏦" },
-      { symbol: "XLV", name: "Santé", detail: "💊" },
-      { symbol: "XLE", name: "Énergie", detail: "⚡" },
+      { symbol: "XLF", name: "Finance", detail: "△" },
+      { symbol: "XLV", name: "Santé", detail: "△" },
+      { symbol: "XLE", name: "Énergie", detail: "△" },
       { symbol: "XLK", name: "Tech", detail: "🖥️" },
       { symbol: "XLI", name: "Industrie", detail: "🏗️" },
       { symbol: "XLY", name: "Conso.", detail: "🛒" },

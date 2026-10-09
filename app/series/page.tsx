@@ -82,7 +82,7 @@ function LoadingGrid() {
 /* ── Series card ─────────────────────────────────────────────────────── */
 
 const statusLabels: Record<SeriesWatchlistItem["status"], { label: string; icon: string; color: string }> = {
-  "à voir": { label: "À voir", icon: "📋", color: INDIGO },
+  "à voir": { label: "À voir", icon: "▪", color: INDIGO },
   "en cours": { label: "En cours", icon: "▶️", color: GOLD },
   terminé: { label: "Terminé", icon: "✓", color: GREEN },
 };
@@ -397,7 +397,7 @@ export default function SeriesAndVideos() {
         {/* Section toggle */}
         <div className="bb-segmented mt-6">
           {([
-            { value: "series" as Section, label: "Séries", icon: "🎬" },
+            { value: "series" as Section, label: "Séries", icon: "▣" },
             { value: "videos" as Section, label: "Vidéos YouTube", icon: "▶️" },
           ]).map((s) => (
             <button
@@ -417,8 +417,8 @@ export default function SeriesAndVideos() {
           <>
             <div className="mt-5 flex" style={{ gap: 6 }}>
               {([
-                { value: "parcourir" as SeriesTab, label: "Parcourir", icon: "🔍" },
-                { value: "maliste" as SeriesTab, label: "Ma liste", icon: "📋" },
+                { value: "parcourir" as SeriesTab, label: "Parcourir", icon: "◎" },
+                { value: "maliste" as SeriesTab, label: "Ma liste", icon: "▪" },
               ]).map((t) => (
                 <button key={t.value} type="button" onClick={() => setSeriesTab(t.value)}
                   className={`bb-chip ${seriesTab === t.value ? "bb-chip-active" : "bb-chip-inactive"}`} style={{ gap: 6 }}>
@@ -470,7 +470,7 @@ export default function SeriesAndVideos() {
               <>
                 {myListSources.length === 0 ? (
                   <div className="mt-8 text-center animate-fade-up" style={{ background: WHITE, border: `1px solid ${black(0.06)}`, borderRadius: 16, padding: "56px 24px" }}>
-                    <p style={{ fontSize: 36 }}>📺</p>
+                    <p style={{ fontSize: 36 }}>▣</p>
                     <p className="mt-3" style={{ fontSize: 15, fontWeight: 600, color: TEXT }}>Ta liste est vide</p>
                     <p className="mx-auto mt-1.5" style={{ fontSize: 13, color: DIM, maxWidth: 300, lineHeight: 1.6 }}>
                       Parcours les séries et ajoute celles qui te tentent à ta liste.
@@ -497,8 +497,8 @@ export default function SeriesAndVideos() {
           <>
             <div className="mt-5 flex" style={{ gap: 6 }}>
               {([
-                { value: "parcourir" as VideoTab, label: "Parcourir", icon: "🔍" },
-                { value: "abonnements" as VideoTab, label: "Mes chaînes", icon: "📺" },
+                { value: "parcourir" as VideoTab, label: "Parcourir", icon: "◎" },
+                { value: "abonnements" as VideoTab, label: "Mes chaînes", icon: "▣" },
               ]).map((t) => (
                 <button key={t.value} type="button" onClick={() => setVideoTab(t.value)}
                   className={`bb-chip ${videoTab === t.value ? "bb-chip-active" : "bb-chip-inactive"}`} style={{ gap: 6 }}>
@@ -536,7 +536,7 @@ export default function SeriesAndVideos() {
               <>
                 {subscribedSources.length === 0 ? (
                   <div className="mt-8 text-center animate-fade-up" style={{ background: WHITE, border: `1px solid ${black(0.06)}`, borderRadius: 16, padding: "56px 24px" }}>
-                    <p style={{ fontSize: 36 }}>📺</p>
+                    <p style={{ fontSize: 36 }}>▣</p>
                     <p className="mt-3" style={{ fontSize: 15, fontWeight: 600, color: TEXT }}>Aucune chaîne suivie</p>
                     <p className="mx-auto mt-1.5" style={{ fontSize: 13, color: DIM, maxWidth: 300, lineHeight: 1.6 }}>
                       Découvre les chaînes YouTube culturelles et suis celles qui te plaisent.
