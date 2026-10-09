@@ -38,7 +38,6 @@ import {
 import { ensureProfile } from "@/lib/profile";
 import { avatarTones } from "@/lib/sample-data";
 import { getUserSubscriptions, NEWSLETTER_SOURCES } from "@/lib/newsletter";
-import { getUserPodcastSubscriptions } from "@/lib/podcasts";
 import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
@@ -148,7 +147,9 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
   { icon: "\u{1F3B5}", label: "Musique", filter: "Musique" },
   { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
+  { icon: "\u{1F399}", label: "Podcasts", href: "/podcasts" },
   { icon: "✉️", label: "Newsletter", href: "/newsletter" },
+  { icon: "\u{1F4F0}", label: "Actualités", href: "/actualites" },
 ];
 
 // spaces is now computed inside the component with dynamic counts
@@ -935,7 +936,6 @@ export default function Dashboard() {
   const [utilityOpen, setUtilityOpen] = useState(false);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
   const [nlArticles, setNlArticles] = useState<NewsletterArticle[]>([]);
-  const [podcastSubCount, setPodcastSubCount] = useState(0);
 
   // Dynamic CSS that uses theme tokens
   const css = `
@@ -945,8 +945,6 @@ export default function Dashboard() {
 .db-pill:hover { background: ${t.black(0.08)}; }
 .db-chip { background: ${t.surface}; color: ${t.ink(0.5)}; }
 .db-chip:hover { background: ${t === DARK ? "#243059" : "#EAE3D6"}; }
-.db-space { background: ${t.surface}; transition: background-color 0.15s; }
-.db-space:hover { background: ${t === DARK ? "#243059" : "#EAE3D6"}; }
 .db-option { background: ${t.white}; }
 .db-option:hover { background: ${t.black(0.03)}; }
 .db-fab { background: ${t === DARK ? "#7B8CDE" : "#2A3560"}; }
@@ -1075,12 +1073,6 @@ ${socialCardsCss}
     return () => { cancelled = true; };
   }, [userId]);
 
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    getUserPodcastSubscriptions(userId).then((list) => { if (!cancelled) setPodcastSubCount(list.length); });
-    return () => { cancelled = true; };
-  }, [userId]);
 
   const closeModal = useCallback(() => setModalOpen(false), []);
 
@@ -1198,26 +1190,6 @@ ${socialCardsCss}
           ) : (
             <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}><Link href="/explore" style={{ color: t.indigo }}>Découvre des profils</Link> à suivre.</p>
           )}
-          <Divider t={t} />
-          <SectionLabel t={t}>Qui est en ligne</SectionLabel>
-          <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}>{following.length > 0 ? "Aucun abonné en ligne pour le moment." : "Suis des profils pour voir leur activité ici."}</p>
-          <Divider t={t} />
-          <SectionLabel t={t}>Mes espaces</SectionLabel>
-          <div className="grid grid-cols-2" style={{ gap: 6 }}>
-            {([
-              { icon: "\u{1F3B5}", title: "Musique", detail: `${(posts ?? []).filter((p) => p.type === "musique").length || "0"} titre${(posts ?? []).filter((p) => p.type === "musique").length !== 1 ? "s" : ""}`, filter: "Musique" },
-              { icon: "\u{1F4D6}", title: "Livres", detail: `${(posts ?? []).filter((p) => p.type === "livre").length || "0"} en cours`, href: "/livres" },
-              { icon: "\u{1F399}", title: "Podcasts", detail: podcastSubCount > 0 ? `${podcastSubCount} abonnement${podcastSubCount !== 1 ? "s" : ""}` : "Découvrir", href: "/podcasts" },
-            ] as { icon: string; title: string; detail: string; filter?: string; href?: string }[]).map((space) => {
-              const content = <><span aria-hidden style={{ fontSize: 16 }}>{space.icon}</span><span className="mt-1 block" style={{ fontSize: 11, fontWeight: 500, color: t.text }}>{space.title}</span><span className="block" style={{ fontSize: 10, color: t.ink(0.4) }}>{space.detail}</span></>;
-              const style: CSSProperties = { borderRadius: 10, padding: 10 };
-              return space.href ? (
-                <Link key={space.title} href={space.href} className="db-space block" style={style}>{content}</Link>
-              ) : (
-                <button key={space.title} type="button" onClick={() => space.filter && setFilter(space.filter)} className="db-space text-left" style={style}>{content}</button>
-              );
-            })}
-          </div>
         </aside>
 
         {/* Feed */}
@@ -1310,23 +1282,6 @@ ${socialCardsCss}
           <SectionLabel t={t}>Profils suggérés</SectionLabel>
           <SuggestedProfiles t={t} userId={userId} />
           <Divider t={t} />
-          <SectionLabel t={t}>Raccourcis</SectionLabel>
-          <div className="grid grid-cols-3" style={{ gap: 6 }}>
-            {[
-              { icon: "\u{1F4EC}", label: "Newsletters", href: "/newsletter" },
-              { icon: "\u{1F399}", label: "Podcasts", href: "/podcasts" },
-              { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
-              { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
-              { icon: "\u{1F4F0}", label: "Actus", href: "/actualites" },
-              { icon: "⚙️", label: "Réglages", href: "/settings" },
-            ].map((link) => (
-              <Link key={link.label} href={link.href} className="db-hover flex flex-col items-center"
-                style={{ background: t.cream, padding: "10px 4px", borderRadius: 12, fontSize: 10, gap: 3, color: t.ink(0.6), textDecoration: "none" }}>
-                <span aria-hidden style={{ fontSize: 16 }}>{link.icon}</span>{link.label}
-              </Link>
-            ))}
-          </div>
-          <Divider t={t} />
           <SectionLabel t={t}>Mes thèmes</SectionLabel>
           <div className="flex flex-wrap" style={{ gap: 5 }}>
             {(preferences.themes.length > 0 ? preferences.themes : ["Aucun thème sélectionné"]).map((theme) => (
@@ -1337,29 +1292,6 @@ ${socialCardsCss}
           </div>
           <button type="button" onClick={() => setCustomizerOpen(true)} className="db-hover mt-2 w-full"
             style={{ border: `1px solid ${t.black(0.08)}`, borderRadius: 8, fontSize: 11, padding: 6, color: t.ink(0.6) }}>Personnaliser</button>
-          <Divider t={t} />
-          <div className="flex flex-col" style={{ gap: 8 }}>
-            <Link href="/newsletter" style={{ textDecoration: "none" }}>
-              <div className="db-hover flex items-center gap-3" style={{ background: t.cream, borderRadius: 12, padding: 12, cursor: "pointer" }}>
-                <span style={{ fontSize: 20 }}>{"\u{1F4EC}"}</span>
-                <div className="min-w-0 flex-1">
-                  <p style={{ fontSize: 12, fontWeight: 500, color: t.text }}>Newsletters</p>
-                  <p style={{ fontSize: 10, color: t.ink(0.4) }}>Culturelles françaises</p>
-                </div>
-                <span style={{ fontSize: 11, color: t.indigo }}>→</span>
-              </div>
-            </Link>
-            <Link href="/podcasts" style={{ textDecoration: "none" }}>
-              <div className="db-hover flex items-center gap-3" style={{ background: t.cream, borderRadius: 12, padding: 12, cursor: "pointer" }}>
-                <span style={{ fontSize: 20 }}>{"\u{1F399}"}</span>
-                <div className="min-w-0 flex-1">
-                  <p style={{ fontSize: 12, fontWeight: 500, color: t.text }}>Podcasts{podcastSubCount > 0 ? ` · ${podcastSubCount}` : ""}</p>
-                  <p style={{ fontSize: 10, color: t.ink(0.4) }}>Découvrir & écouter</p>
-                </div>
-                <span style={{ fontSize: 11, color: t.indigo }}>→</span>
-              </div>
-            </Link>
-          </div>
         </aside>
       </div>
 
