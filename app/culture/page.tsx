@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 
 // ── Theme ────────────────────────────────────────────────────────────────
@@ -20,452 +20,325 @@ function useTheme() {
 }
 
 // ── Types ────────────────────────────────────────────────────────────────
-type Topic = {
-  id: string;
+type WikiItem = {
+  type: "wikipedia" | "ephemeride";
   title: string;
-  slug: string;
   summary: string;
-  content: string;
+  image: string | null;
+  url: string | null;
+  source: string;
   category: string;
-  image_url: string | null;
-  source_url: string | null;
-  source_name: string | null;
-  fun_fact: string | null;
-  tags: string[] | null;
-  publish_date: string;
-  reading_time_min: number;
-  difficulty: string;
-  likes_count: number;
-  views_count: number;
+  year?: number;
 };
 
-// ── Category config ──────────────────────────────────────────────────────
-const CATEGORY_ICONS: Record<string, string> = {
-  Philosophie: "\u{1F9D0}",
-  Science: "\u{1F52C}",
-  Art: "\u{1F3A8}",
-  Histoire: "\u{1F3DB}",
-  "Littérature": "\u{1F4DA}",
-  Musique: "\u{1F3B5}",
-  "Cinéma": "\u{1F3AC}",
-  "Géographie": "\u{1F30D}",
-  Psychologie: "\u{1F9E0}",
-  Technologie: "\u{1F4BB}",
+type BookItem = {
+  type: "book";
+  title: string;
+  author: string;
+  year: number | null;
+  cover: string | null;
+  url: string;
+  subjects: string[];
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Philosophie: "#8B5CF6",
-  Science: "#3B82F6",
-  Art: "#EC4899",
-  Histoire: "#F59E0B",
-  "Littérature": "#10B981",
-  Musique: "#6366F1",
-  "Cinéma": "#EF4444",
-  "Géographie": "#14B8A6",
-  Psychologie: "#A855F7",
-  Technologie: "#06B6D4",
+type MediaLink = {
+  name: string;
+  url: string;
+  description: string;
+  icon: string;
 };
 
-const DIFFICULTY_LABEL: Record<string, string> = {
-  accessible: "Accessible",
-  "intermédiaire": "Intermédiaire",
-  "avancé": "Avancé",
+type FeedData = {
+  date: string;
+  featured: WikiItem | null;
+  onThisDay: WikiItem[];
+  mostRead: WikiItem[];
+  books: BookItem[];
+  media: MediaLink[];
 };
 
-// ── Fade-in animation ────────────────────────────────────────────────────
-function useFadeIn(delay = 0) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setTimeout(() => setVisible(true), delay); obs.unobserve(el); } }, { threshold: 0.1 });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [delay]);
-  return { ref, style: { opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(20px)", transition: "opacity 0.6s ease, transform 0.6s ease" } };
+// ── Skeleton ─────────────────────────────────────────────────────────────
+function Skeleton({ w = "100%", h = 16 }: { w?: string | number; h?: number }) {
+  return <div style={{ width: w, height: h, borderRadius: 8, background: "rgba(128,128,128,0.1)", animation: "pulse 1.5s ease-in-out infinite" }} />;
 }
 
-function FadeIn({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
-  const { ref, style } = useFadeIn(delay);
-  return <div ref={ref} style={style} className={className}>{children}</div>;
-}
-
-// ── Markdown-lite renderer ───────────────────────────────────────────────
-function renderMarkdown(md: string, t: typeof LIGHT) {
-  const lines = md.split("\n");
-  const elements: React.ReactNode[] = [];
-  let i = 0;
-  let key = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (line.startsWith("## ")) {
-      elements.push(<h2 key={key++} style={{ fontSize: 22, fontWeight: 700, color: t.text, marginTop: 32, marginBottom: 12, fontFamily: "'Georgia', serif" }}>{line.slice(3)}</h2>);
-      i++;
-      continue;
-    }
-
-    if (line.startsWith("- ")) {
-      const items: string[] = [];
-      while (i < lines.length && lines[i].startsWith("- ")) {
-        items.push(lines[i].slice(2));
-        i++;
-      }
-      elements.push(
-        <ul key={key++} style={{ margin: "12px 0", paddingLeft: 24 }}>
-          {items.map((item, j) => (
-            <li key={j} style={{ fontSize: 15, lineHeight: 1.7, color: t.text, marginBottom: 6 }}>
-              <span dangerouslySetInnerHTML={{ __html: inlineFormat(item) }} />
-            </li>
-          ))}
-        </ul>
-      );
-      continue;
-    }
-
-    if (line.trim() === "") {
-      i++;
-      continue;
-    }
-
-    elements.push(<p key={key++} style={{ fontSize: 15, lineHeight: 1.8, color: t.text, marginBottom: 16 }} dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />);
-    i++;
-  }
-
-  return elements;
-}
-
-function inlineFormat(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:rgba(0,0,0,0.06);padding:2px 6px;border-radius:4px;font-size:13px">$1</code>');
-}
-
-// ── Topic Card (archive) ─────────────────────────────────────────────────
-function TopicCard({ topic, t, onClick }: { topic: Topic; t: typeof LIGHT; onClick: () => void }) {
-  const cat = topic.category;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        background: t.white,
-        borderRadius: 16,
-        border: `1px solid ${t.border}`,
-        boxShadow: t.cardShadow,
-        padding: 24,
-        textAlign: "left",
-        cursor: "pointer",
-        transition: "transform 0.2s ease, box-shadow 0.2s ease",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-      }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = t.cardShadow; }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 14, background: `${CATEGORY_COLORS[cat] ?? t.indigo}15`, color: CATEGORY_COLORS[cat] ?? t.indigo, padding: "4px 10px", borderRadius: 20, fontWeight: 500 }}>
-          {CATEGORY_ICONS[cat] ?? "\u{1F4D6}"} {cat}
-        </span>
-        <span style={{ fontSize: 11, color: t.textMuted }}>{topic.reading_time_min} min</span>
-      </div>
-      <h3 style={{ fontSize: 17, fontWeight: 700, color: t.text, lineHeight: 1.3, fontFamily: "'Georgia', serif", margin: 0 }}>{topic.title}</h3>
-      <p style={{ fontSize: 13, color: t.textMuted, lineHeight: 1.5, margin: 0 }}>{topic.summary.slice(0, 140)}...</p>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto" }}>
-        <span style={{ fontSize: 11, color: t.textMuted }}>{new Date(topic.publish_date).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}</span>
-        <span style={{ fontSize: 11, color: t.textMuted }}>{"·"}</span>
-        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 8, background: `${t.indigo}10`, color: t.indigo, fontWeight: 500 }}>{DIFFICULTY_LABEL[topic.difficulty] ?? topic.difficulty}</span>
-      </div>
-    </button>
-  );
-}
-
-// ── Main Page ────────────────────────────────────────────────────────────
+// ── Page ─────────────────────────────────────────────────────────────────
 export default function CulturePage() {
   const t = useTheme();
-  const [todayTopic, setTodayTopic] = useState<Topic | null>(null);
-  const [archive, setArchive] = useState<Topic[]>([]);
-  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [feed, setFeed] = useState<FeedData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<Record<string, number>>({});
+  const [activeTab, setActiveTab] = useState<"decouvrir" | "livres" | "medias">("decouvrir");
 
-  const fetchToday = useCallback(async () => {
+  const fetchFeed = useCallback(async () => {
     try {
-      const res = await fetch("/api/culture?mode=today");
+      const res = await fetch("/api/culture/feed");
+      if (!res.ok) throw new Error("fetch failed");
       const data = await res.json();
-      if (data.topic) setTodayTopic(data.topic);
+      setFeed(data);
     } catch { /* no-op */ }
+    setLoading(false);
   }, []);
 
-  const fetchArchive = useCallback(async (category?: string | null) => {
-    try {
-      const url = `/api/culture?mode=archive&limit=50${category ? `&category=${encodeURIComponent(category)}` : ""}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      setArchive(data.topics ?? []);
-    } catch { /* no-op */ }
-  }, []);
+  useEffect(() => { fetchFeed(); }, [fetchFeed]);
 
-  const fetchCategories = useCallback(async () => {
-    try {
-      const res = await fetch("/api/culture?mode=categories");
-      const data = await res.json();
-      setCategories(data.categories ?? {});
-    } catch { /* no-op */ }
-  }, []);
+  const card: React.CSSProperties = { background: t.white, borderRadius: 14, border: `1px solid ${t.border}`, boxShadow: t.cardShadow };
+  const DIM = t.textMuted;
 
-  const fetchFullTopic = useCallback(async (slug: string) => {
-    try {
-      const res = await fetch(`/api/culture?mode=topic&slug=${slug}`);
-      const data = await res.json();
-      if (data.topic) setSelectedTopic(data.topic);
-    } catch { /* no-op */ }
-  }, []);
+  return (
+    <div style={{ minHeight: "100vh", background: t.cream }}>
+      <Navbar />
+      <style>{`@keyframes pulse { 0%,100% { opacity: 0.4 } 50% { opacity: 0.8 } }`}</style>
 
-  useEffect(() => {
-    Promise.all([fetchToday(), fetchArchive(), fetchCategories()]).finally(() => setLoading(false));
-  }, [fetchToday, fetchArchive, fetchCategories]);
+      <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 16px 80px" }}>
 
-  const handleCategoryClick = (cat: string | null) => {
-    setActiveCategory(cat);
-    fetchArchive(cat);
-  };
+        {/* ── Header */}
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: t.text, fontFamily: "'Georgia', serif", marginBottom: 4 }}>
+            Culture
+          </h1>
+          {feed && (
+            <p style={{ fontSize: 13, color: DIM, textTransform: "capitalize" }}>{feed.date}</p>
+          )}
+        </div>
 
-  // ── Full article view ──────────────────────────────────────────────────
-  if (selectedTopic) {
-    return (
-      <div style={{ minHeight: "100vh", background: t.cream }}>
-        <Navbar />
-        <main style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px 80px" }}>
-          <button
-            type="button"
-            onClick={() => setSelectedTopic(null)}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: t.indigo, fontSize: 14, fontWeight: 500, marginBottom: 24 }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            Retour
-          </button>
+        {/* ── Tabs */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 24, borderBottom: `1px solid ${t.border}`, paddingBottom: 1 }}>
+          {([
+            { key: "decouvrir" as const, label: "Découvrir" },
+            { key: "livres" as const, label: "Livres" },
+            { key: "medias" as const, label: "Médias" },
+          ]).map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                padding: "8px 16px", fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 400,
+                color: activeTab === tab.key ? t.indigo : DIM,
+                borderBottom: activeTab === tab.key ? `2px solid ${t.indigo}` : "2px solid transparent",
+                marginBottom: -1, transition: "all 0.15s ease",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-          <FadeIn>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <span style={{ fontSize: 14, background: `${CATEGORY_COLORS[selectedTopic.category] ?? t.indigo}15`, color: CATEGORY_COLORS[selectedTopic.category] ?? t.indigo, padding: "5px 12px", borderRadius: 20, fontWeight: 500 }}>
-                {CATEGORY_ICONS[selectedTopic.category] ?? "\u{1F4D6}"} {selectedTopic.category}
-              </span>
-              <span style={{ fontSize: 12, color: t.textMuted }}>{selectedTopic.reading_time_min} min de lecture</span>
-              <span style={{ fontSize: 12, color: t.textMuted }}>{"·"}</span>
-              <span style={{ fontSize: 12, color: t.textMuted }}>{DIFFICULTY_LABEL[selectedTopic.difficulty]}</span>
-            </div>
-          </FadeIn>
+        {/* ── Loading */}
+        {loading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {[1,2,3].map(i => (
+              <div key={i} style={{ ...card, padding: 24 }}>
+                <Skeleton w="60%" h={20} />
+                <div style={{ marginTop: 12 }}><Skeleton w="100%" h={14} /></div>
+                <div style={{ marginTop: 8 }}><Skeleton w="80%" h={14} /></div>
+              </div>
+            ))}
+          </div>
+        )}
 
-          <FadeIn delay={80}>
-            <h1 style={{ fontSize: 32, fontWeight: 800, color: t.text, lineHeight: 1.2, fontFamily: "'Georgia', serif", marginBottom: 12 }}>{selectedTopic.title}</h1>
-          </FadeIn>
+        {/* ── Tab: Découvrir */}
+        {!loading && activeTab === "decouvrir" && feed && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-          <FadeIn delay={120}>
-            <p style={{ fontSize: 16, color: t.textMuted, lineHeight: 1.6, marginBottom: 32, fontStyle: "italic" }}>{selectedTopic.summary}</p>
-          </FadeIn>
+            {/* Article du jour Wikipedia */}
+            {feed.featured && (
+              <a
+                href={feed.featured.url ?? "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ...card, padding: 0, overflow: "hidden", textDecoration: "none", color: "inherit", display: "block", transition: "transform 0.2s ease" }}
+                onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-2px)")}
+                onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}
+              >
+                {feed.featured.image && (
+                  <div style={{ width: "100%", height: 200, overflow: "hidden" }}>
+                    <img src={feed.featured.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                )}
+                <div style={{ padding: "20px 24px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: t.gold, textTransform: "uppercase", letterSpacing: 1.5 }}>
+                      ✦ Article du jour
+                    </span>
+                    <span style={{ fontSize: 11, color: DIM }}>— Wikipedia</span>
+                  </div>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, color: t.text, lineHeight: 1.3, fontFamily: "'Georgia', serif", margin: 0 }}>
+                    {feed.featured.title}
+                  </h2>
+                  <p style={{ fontSize: 14, color: DIM, lineHeight: 1.7, marginTop: 10, marginBottom: 0 }}>
+                    {feed.featured.summary}
+                  </p>
+                </div>
+              </a>
+            )}
 
-          <FadeIn delay={160}>
-            <div style={{ background: t.white, borderRadius: 16, border: `1px solid ${t.border}`, padding: "32px 28px" }}>
-              {renderMarkdown(selectedTopic.content, t)}
-            </div>
-          </FadeIn>
-
-          {selectedTopic.fun_fact && (
-            <FadeIn delay={200}>
-              <div style={{ marginTop: 24, background: `${t.gold}12`, border: `1px solid ${t.gold}30`, borderRadius: 14, padding: "20px 24px", display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 24, flexShrink: 0 }}>{"\u{1F4A1}"}</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: t.gold, marginBottom: 4 }}>Le saviez-vous ?</div>
-                  <p style={{ fontSize: 14, color: t.text, lineHeight: 1.6, margin: 0 }}>{selectedTopic.fun_fact}</p>
+            {/* Éphémérides */}
+            {feed.onThisDay.length > 0 && (
+              <div style={{ ...card, padding: "20px 24px" }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: t.gold }}>◈</span> Ce jour dans l&apos;histoire
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  {feed.onThisDay.map((ev, i) => (
+                    <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 0", borderTop: i > 0 ? `1px solid ${t.border}` : "none" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: t.indigo, minWidth: 44, fontFamily: "'Georgia', serif" }}>
+                        {ev.year}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 13, color: t.text, lineHeight: 1.6, margin: 0 }}>{ev.title}</p>
+                        {ev.url && (
+                          <a href={ev.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: t.indigo, textDecoration: "none", marginTop: 4, display: "inline-block" }}>
+                            En savoir plus →
+                          </a>
+                        )}
+                      </div>
+                      {ev.image && (
+                        <img src={ev.image} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
-            </FadeIn>
-          )}
+            )}
 
-          {selectedTopic.tags && selectedTopic.tags.length > 0 && (
-            <FadeIn delay={240}>
-              <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {selectedTopic.tags.map(tag => (
-                  <span key={tag} style={{ fontSize: 12, color: t.indigo, background: `${t.indigo}10`, padding: "4px 12px", borderRadius: 20 }}>#{tag}</span>
+            {/* Articles tendance Wikipedia */}
+            {feed.mostRead.length > 0 && (
+              <div style={{ ...card, padding: "20px 24px" }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: t.gold }}>↗</span> Les plus lus sur Wikipedia
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+                  {feed.mostRead.map((article, i) => (
+                    <a
+                      key={i}
+                      href={article.url ?? "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "flex", gap: 12, alignItems: "center",
+                        padding: 12, borderRadius: 10, textDecoration: "none", color: "inherit",
+                        background: t.cream, transition: "background 0.15s ease",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = t.surface)}
+                      onMouseLeave={e => (e.currentTarget.style.background = t.cream)}
+                    >
+                      {article.image ? (
+                        <img src={article.image} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 44, height: 44, borderRadius: 8, background: `${t.indigo}10`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18, color: t.indigo }}>◎</div>
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: t.text, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{article.title}</p>
+                        {article.summary && (
+                          <p style={{ fontSize: 11, color: DIM, margin: "3px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{article.summary.slice(0, 80)}</p>
+                        )}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Tab: Livres */}
+        {!loading && activeTab === "livres" && feed && (
+          <div>
+            {feed.books.length > 0 ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+                {feed.books.map((book, i) => (
+                  <a
+                    key={i}
+                    href={book.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ ...card, padding: 0, overflow: "hidden", textDecoration: "none", color: "inherit", transition: "transform 0.2s ease" }}
+                    onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-2px)")}
+                    onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}
+                  >
+                    <div style={{ height: 180, background: t.surface, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {book.cover ? (
+                        <img src={book.cover} alt="" style={{ height: "100%", objectFit: "contain" }} />
+                      ) : (
+                        <span style={{ fontSize: 48, opacity: 0.2 }}>📕</span>
+                      )}
+                    </div>
+                    <div style={{ padding: "14px 16px" }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 600, color: t.text, margin: 0, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const }}>
+                        {book.title}
+                      </h4>
+                      <p style={{ fontSize: 12, color: DIM, margin: "6px 0 0" }}>
+                        {book.author}{book.year ? ` · ${book.year}` : ""}
+                      </p>
+                      {book.subjects.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                          {book.subjects.slice(0, 2).map(s => (
+                            <span key={s} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: `${t.indigo}10`, color: t.indigo }}>{s}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </a>
                 ))}
               </div>
-            </FadeIn>
-          )}
-
-          {selectedTopic.source_url && (
-            <FadeIn delay={280}>
-              <div style={{ marginTop: 24, fontSize: 13, color: t.textMuted }}>
-                Source : <a href={selectedTopic.source_url} target="_blank" rel="noopener noreferrer" style={{ color: t.indigo, textDecoration: "underline" }}>{selectedTopic.source_name ?? "Lien"}</a>
+            ) : (
+              <div style={{ ...card, padding: 40, textAlign: "center" }}>
+                <p style={{ fontSize: 14, color: DIM }}>Aucun livre trouvé pour le moment.</p>
               </div>
-            </FadeIn>
-          )}
-
-          <FadeIn delay={300}>
-            <div style={{ marginTop: 32, fontSize: 13, color: t.textMuted, textAlign: "center" }}>
-              Publié le {new Date(selectedTopic.publish_date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
-            </div>
-          </FadeIn>
-        </main>
-      </div>
-    );
-  }
-
-  // ── Main listing view ──────────────────────────────────────────────────
-  return (
-    <div className="page-enter" style={{ minHeight: "100vh", background: t.cream }}>
-      <Navbar />
-      <main style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 20px 80px" }}>
-
-        {/* Header */}
-        <FadeIn>
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <h1 style={{ fontSize: 36, fontWeight: 800, color: t.text, fontFamily: "'Georgia', serif", marginBottom: 8 }}>
-              {"\u{1F4D6}"} Culture
-            </h1>
-            <p style={{ fontSize: 16, color: t.textMuted, maxWidth: 520, margin: "0 auto", lineHeight: 1.6 }}>
-              Un nouveau sujet chaque jour pour nourrir votre curiosité. Philosophie, science, art, histoire et bien plus.
+            )}
+            <p style={{ fontSize: 11, color: DIM, marginTop: 16, textAlign: "center" }}>
+              Données : <a href="https://openlibrary.org" target="_blank" rel="noopener noreferrer" style={{ color: t.indigo, textDecoration: "none" }}>Open Library</a> — le sujet change chaque jour
             </p>
           </div>
-        </FadeIn>
+        )}
 
-        {/* Sujet du jour */}
-        {todayTopic && (
-          <FadeIn delay={100}>
-            <div style={{ marginBottom: 48 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: t.gold, textTransform: "uppercase", letterSpacing: 2 }}>{"✨"} Sujet du jour</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => fetchFullTopic(todayTopic.slug)}
+        {/* ── Tab: Médias */}
+        {!loading && activeTab === "medias" && feed && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <p style={{ fontSize: 13, color: DIM, marginBottom: 8, lineHeight: 1.6 }}>
+              Une sélection de sources fiables pour explorer la culture, les idées et le savoir au quotidien.
+            </p>
+            {feed.media.map((m, i) => (
+              <a
+                key={i}
+                href={m.url}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
-                  width: "100%",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  background: `linear-gradient(135deg, ${t.indigo}, ${t.indigo}DD)`,
-                  borderRadius: 20,
-                  border: "none",
-                  padding: "36px 32px",
-                  color: "white",
-                  position: "relative",
-                  overflow: "hidden",
-                  transition: "transform 0.2s ease",
+                  ...card, padding: "16px 20px", textDecoration: "none", color: "inherit",
+                  display: "flex", alignItems: "center", gap: 16, transition: "transform 0.15s ease",
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; }}
+                onMouseEnter={e => (e.currentTarget.style.transform = "translateX(4px)")}
+                onMouseLeave={e => (e.currentTarget.style.transform = "translateX(0)")}
               >
-                <div style={{ position: "absolute", top: -40, right: -40, width: 200, height: 200, borderRadius: "50%", background: "rgba(196,169,74,0.12)" }} />
-                <div style={{ position: "absolute", bottom: -60, left: -20, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
-                <div style={{ position: "relative", zIndex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                    <span style={{ fontSize: 13, background: "rgba(255,255,255,0.15)", padding: "4px 12px", borderRadius: 20, fontWeight: 500 }}>
-                      {CATEGORY_ICONS[todayTopic.category] ?? "\u{1F4D6}"} {todayTopic.category}
-                    </span>
-                    <span style={{ fontSize: 12, opacity: 0.7 }}>{todayTopic.reading_time_min} min de lecture</span>
-                  </div>
-                  <h2 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 12px", fontFamily: "'Georgia', serif", lineHeight: 1.2 }}>{todayTopic.title}</h2>
-                  <p style={{ fontSize: 15, opacity: 0.85, lineHeight: 1.6, margin: "0 0 20px", maxWidth: 600 }}>{todayTopic.summary}</p>
-                  <span style={{ fontSize: 14, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    Lire l&apos;article
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </span>
+                <span style={{ fontSize: 22, width: 40, textAlign: "center", flexShrink: 0 }}>{m.icon}</span>
+                <div style={{ minWidth: 0 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, color: t.text, margin: 0 }}>{m.name}</h4>
+                  <p style={{ fontSize: 12, color: DIM, margin: "3px 0 0" }}>{m.description}</p>
                 </div>
-              </button>
-            </div>
-          </FadeIn>
+                <span style={{ marginLeft: "auto", fontSize: 14, color: DIM, flexShrink: 0 }}>→</span>
+              </a>
+            ))}
+          </div>
         )}
 
-        {/* Fun fact du sujet du jour */}
-        {todayTopic?.fun_fact && (
-          <FadeIn delay={150}>
-            <div style={{ marginBottom: 40, background: `${t.gold}12`, border: `1px solid ${t.gold}30`, borderRadius: 14, padding: "16px 20px", display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>{"\u{1F4A1}"}</span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: t.gold, marginBottom: 4 }}>Le saviez-vous ?</div>
-                <p style={{ fontSize: 14, color: t.text, lineHeight: 1.5, margin: 0 }}>{todayTopic.fun_fact}</p>
-              </div>
-            </div>
-          </FadeIn>
-        )}
-
-        {/* Categories filter */}
-        <FadeIn delay={200}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 28 }}>
+        {/* ── Empty feed fallback */}
+        {!loading && !feed && (
+          <div style={{ ...card, padding: 40, textAlign: "center" }}>
+            <p style={{ fontSize: 16, color: t.text, marginBottom: 8 }}>Impossible de charger le contenu</p>
+            <p style={{ fontSize: 13, color: DIM, marginBottom: 16 }}>Vérifie ta connexion et réessaie.</p>
             <button
               type="button"
-              onClick={() => handleCategoryClick(null)}
-              className={activeCategory === null ? "bb-chip bb-chip-active" : "bb-chip bb-chip-inactive"}
-              style={{ fontSize: 13, padding: "6px 16px" }}
+              onClick={() => { setLoading(true); fetchFeed(); }}
+              style={{ background: t.indigo, color: "#fff", border: "none", borderRadius: 10, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontWeight: 500 }}
             >
-              Tous
+              Réessayer
             </button>
-            {Object.keys(categories).sort().map(cat => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => handleCategoryClick(cat)}
-                style={{
-                  fontSize: 13,
-                  fontWeight: activeCategory === cat ? 600 : 400,
-                  color: activeCategory === cat ? "white" : t.text,
-                  background: activeCategory === cat ? (CATEGORY_COLORS[cat] ?? t.indigo) : t.white,
-                  border: `1px solid ${activeCategory === cat ? "transparent" : t.border}`,
-                  borderRadius: 20,
-                  padding: "6px 16px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                {CATEGORY_ICONS[cat] ?? ""} {cat} ({categories[cat]})
-              </button>
-            ))}
-          </div>
-        </FadeIn>
-
-        {/* Archive grid */}
-        {loading ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} style={{ background: t.white, borderRadius: 16, border: `1px solid ${t.border}`, padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-                <div className="flex items-center gap-2">
-                  <span className="bb-skeleton" style={{ width: 80, height: 22, borderRadius: 20 }} />
-                  <span className="bb-skeleton" style={{ width: 48, height: 14, borderRadius: 6 }} />
-                </div>
-                <span className="bb-skeleton" style={{ width: "85%", height: 18, borderRadius: 6 }} />
-                <span className="bb-skeleton" style={{ width: "100%", height: 14, borderRadius: 6 }} />
-                <span className="bb-skeleton" style={{ width: "60%", height: 14, borderRadius: 6 }} />
-              </div>
-            ))}
-          </div>
-        ) : archive.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 60, color: t.textMuted, fontSize: 14 }}>
-            {activeCategory ? `Aucun sujet dans la catégorie ${activeCategory}` : "Aucun sujet disponible"}
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
-            {archive
-              .filter(topic => !todayTopic || topic.slug !== todayTopic.slug)
-              .map((topic, i) => (
-                <FadeIn key={topic.id} delay={50 * Math.min(i, 8)}>
-                  <TopicCard topic={topic} t={t} onClick={() => fetchFullTopic(topic.slug)} />
-                </FadeIn>
-              ))}
           </div>
         )}
 
-        {/* Bottom CTA */}
-        <FadeIn delay={300}>
-          <div style={{ textAlign: "center", marginTop: 60, padding: "32px 20px", background: t.white, borderRadius: 16, border: `1px solid ${t.border}` }}>
-            <p style={{ fontSize: 18, fontWeight: 700, color: t.text, fontFamily: "'Georgia', serif", marginBottom: 8 }}>Revenez demain pour un nouveau sujet</p>
-            <p style={{ fontSize: 14, color: t.textMuted }}>Chaque jour, un article pour nourrir votre curiosité</p>
-          </div>
-        </FadeIn>
       </main>
     </div>
   );

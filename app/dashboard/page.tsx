@@ -113,7 +113,7 @@ type OgData = { title: string | null; description: string | null; image: string 
 const NEWS_IN_FEED = 3;
 const POST_SELECT = "*, profiles (id, name, username, avatar_url)";
 
-const filters = ["Tout", "Actualités", "Musique", "Livres", "Podcasts", "Découvertes", "Philo", "Science", "Art"];
+const filters = ["Tout", "Actualités", "Musique", "Livres", "Podcasts", "Découvertes", "Science", "Art"];
 
 const postTypes: { value: PostType; label: string; verb: string; filter: string }[] = [
   { value: "article", label: "Article", verb: "partage un article", filter: "Actualités" },
@@ -134,7 +134,6 @@ const tones = {
 const categories: { label: string; tone: keyof typeof tones; filter?: string }[] = [
   { label: "Géopolitique", tone: "green" },
   { label: "Histoire", tone: "gold" },
-  { label: "Philosophie", tone: "indigo", filter: "Philo" },
   { label: "Science", tone: "green", filter: "Science" },
   { label: "Art", tone: "rose", filter: "Art" },
   { label: "Musique", tone: "violet" },
