@@ -1,12 +1,9 @@
 import { supabase } from "@/lib/supabase";
 
 export const MODULES = [
-  { id: "actualites", icon: "📰", name: "Actualités", description: "Articles de presse sélectionnés" },
   { id: "musique", icon: "🎵", name: "Musique", description: "Ce qu'écoutent tes contacts" },
   { id: "livres", icon: "📖", name: "Livres", description: "Lectures en cours dans ton réseau" },
-  { id: "podcasts", icon: "🎙️", name: "Podcasts", description: "Épisodes partagés par tes contacts" },
   { id: "decouvertes", icon: "✦", name: "Découvertes", description: "Recommandations personnalisées" },
-  { id: "marches", icon: "📈", name: "Marchés", description: "Flash des marchés financiers" },
   { id: "reactions", icon: "💬", name: "Réactions", description: "Commentaires et débats du moment" },
 ] as const;
 
@@ -28,9 +25,8 @@ export const THEMES = [
 ] as const;
 
 export const FEED_ORDERS = [
-  { id: "equilibre", icon: "⚖️", name: "Équilibré", description: "Mix de social et d'actualités" },
+  { id: "equilibre", icon: "⚖️", name: "Équilibré", description: "Mix de partages et de modules" },
   { id: "social", icon: "👥", name: "Social first", description: "Priorité aux partages de tes contacts" },
-  { id: "actualites", icon: "📰", name: "Actualités first", description: "Priorité aux dernières nouvelles" },
 ] as const;
 
 export type FeedOrder = (typeof FEED_ORDERS)[number]["id"];

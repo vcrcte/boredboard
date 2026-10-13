@@ -14,30 +14,25 @@ import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import Navbar, { getInitials } from "@/components/Navbar";
 import SharedMusicCard from "@/components/MusicCard";
-import NewsCard, { NewsError, NewsSkeleton } from "@/components/NewsCard";
 import Customizer from "@/components/dashboard/Customizer";
 import Actions, { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
 import {
   DiscussionsCard,
-  MarketsFlashCard,
   NowListeningCard,
   ReadingNowCard,
   socialCardsCss,
 } from "@/components/dashboard/SocialCards";
 import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
-import { useNews } from "@/lib/news";
 import {
   DEFAULT_PREFERENCES,
   readLocalPreferences,
   readRemotePreferences,
   savePreferences,
-  themesQuery,
   type ModuleId,
   type Preferences,
 } from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
 import { avatarTones } from "@/lib/sample-data";
-import { getUserSubscriptions, NEWSLETTER_SOURCES } from "@/lib/newsletter";
 import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
@@ -96,24 +91,11 @@ type Post = {
 
 type Profile = { name: string | null; username: string; location: string | null };
 
-type NewsletterArticle = {
-  title: string;
-  description: string;
-  url: string;
-  source_id: string;
-  source_name: string;
-  source_icon: string;
-  source_color: string;
-  theme: string;
-  published_at: string;
-};
-
 type OgData = { title: string | null; description: string | null; image: string | null; domain: string | null; siteName: string | null };
 
-const NEWS_IN_FEED = 3;
 const POST_SELECT = "*, profiles (id, name, username, avatar_url)";
 
-const filters = ["Tout", "Actualités", "Musique", "Livres", "Podcasts", "Découvertes", "Science", "Art"];
+const filters = ["Tout", "Actualités", "Musique", "Livres", "Découvertes", "Science", "Art"];
 
 const postTypes: { value: PostType; label: string; verb: string; filter: string }[] = [
   { value: "article", label: "Article", verb: "partage un article", filter: "Actualités" },
@@ -146,10 +128,6 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "✦", label: "Explorer", href: "/explore" },
   { icon: "♪", label: "Musique", filter: "Musique" },
   { icon: "📕", label: "Livres", href: "/livres" },
-  { icon: "◎", label: "Podcasts", href: "/podcasts" },
-  { icon: "↗", label: "Newsletter", href: "/newsletter" },
-  { icon: "▣", label: "Actualités", href: "/actualites" },
-  { icon: "▶", label: "Séries & Vidéos", href: "/series" },
 ];
 
 // spaces is now computed inside the component with dynamic counts
@@ -220,8 +198,13 @@ function useOgPreview(url: string | null) {
   useEffect(() => {
     if (!url) return;
     let cancelled = false;
-    fetch(`/api/og?url=${encodeURIComponent(url)}`)
-      .then((r) => r.ok ? r.json() : null)
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        const token = data.session?.access_token;
+        if (!token) return null;
+        return fetch(`/api/og?url=${encodeURIComponent(url)}`, { headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((r) => r?.ok ? r.json() : null)
       .then((data) => { if (!cancelled && data) setOg(data); })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -552,6 +535,9 @@ function WelcomeCard({ onNewPost, t }: { onNewPost: () => void; t: typeof LIGHT 
           style={{ color: LIGHT.cream, fontSize: 13, fontWeight: 500, padding: "10px 24px", borderRadius: 20, gap: 6 }}>
           <span aria-hidden>+</span> Créer mon premier post
         </button>
+        <p className="mt-3" style={{ fontSize: 12, color: t.ink(0.5) }}>
+          ou <Link href="/explore" className="db-hover" style={{ color: t.indigo, fontWeight: 500 }}>découvre qui suivre</Link>
+        </p>
       </div>
     </article>
   );
@@ -878,43 +864,6 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
   );
 }
 
-// ── Newsletter article card (shown in the feed) ──────────────────────────
-function NewsletterFeedCard({ articles, t }: { articles: NewsletterArticle[]; t: typeof LIGHT }) {
-  if (articles.length === 0) return null;
-  const card: CSSProperties = { background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 0, border: "none", overflow: "hidden" };
-  return (
-    <div style={card}>
-      <div className="flex items-center gap-2" style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${t.black(0.05)}` }}>
-        <span style={{ fontSize: 16 }}>{"\u{1F4EC}"}</span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Tes newsletters</span>
-        <Link href="/newsletter" className="ml-auto db-hover" style={{ fontSize: 11, color: t.indigo, fontWeight: 500, padding: "2px 8px", borderRadius: 6 }}>
-          Gérer →
-        </Link>
-      </div>
-      <div className="flex flex-col" style={{ gap: 0 }}>
-        {articles.map((a, i) => (
-          <a key={`${a.source_id}-${i}`} href={a.url} target="_blank" rel="noopener noreferrer"
-            className="db-hover flex gap-3"
-            style={{ padding: "12px 16px", textDecoration: "none", borderBottom: i < articles.length - 1 ? `1px solid ${t.black(0.04)}` : undefined }}>
-            <span style={{ width: 36, height: 36, borderRadius: 10, background: a.source_color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
-              {a.source_icon}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text, lineHeight: 1.3 }}>{a.title}</p>
-              {a.description && <p className="line-clamp-2" style={{ fontSize: 11, color: t.ink(0.5), lineHeight: 1.4, marginTop: 2 }}>{a.description}</p>}
-              <div className="mt-1 flex items-center gap-2">
-                <span style={{ fontSize: 10, color: t.ink(0.4) }}>{a.source_name}</span>
-                <span style={{ fontSize: 10, color: t.ink(0.3) }}>·</span>
-                <span style={{ fontSize: 10, color: t.ink(0.4) }}>{a.theme}</span>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════
@@ -935,7 +884,6 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [utilityOpen, setUtilityOpen] = useState(false);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
-  const [nlArticles, setNlArticles] = useState<NewsletterArticle[]>([]);
 
   // Dynamic CSS that uses theme tokens
   const css = `
@@ -1054,30 +1002,9 @@ ${socialCardsCss}
     return () => { cancelled = true; };
   }, [userId]);
 
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      const subs = await getUserSubscriptions(userId);
-      if (cancelled || subs.length === 0) return;
-      const sourceIds = subs.map((s) => s.source_id);
-      const withFeed = NEWSLETTER_SOURCES.filter((s) => sourceIds.includes(s.id) && s.feed_url);
-      if (withFeed.length === 0) return;
-      try {
-        const res = await fetch(`/api/newsletters?sources=${withFeed.map((s) => s.id).join(",")}`);
-        if (!res.ok) return;
-        const { articles } = await res.json();
-        if (!cancelled) setNlArticles(articles ?? []);
-      } catch { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
-
 
   const closeModal = useCallback(() => setModalOpen(false), []);
 
-  const query = themesQuery(preferences.themes);
-  const news = useNews(query ? { q: query } : { category: "Actualités" }, preferences.modules.actualites && Boolean(userId));
 
   const handleSavePreferences = async (next: Preferences) => {
     setPreferences(next);
@@ -1094,7 +1021,7 @@ ${socialCardsCss}
 
   type FeedItem = { key: string; tags: string[]; node: ReactNode };
   const on = (moduleId: ModuleId) => preferences.modules[moduleId];
-  const typeModule: Partial<Record<PostType, ModuleId>> = { article: "actualites", musique: "musique", livre: "livres" };
+  const typeModule: Partial<Record<PostType, ModuleId>> = { musique: "musique", livre: "livres" };
 
   const postItems: FeedItem[] = (posts ?? [])
     .filter((post) => { const m = typeModule[post.type]; return !m || on(m); })
@@ -1107,18 +1034,6 @@ ${socialCardsCss}
   if (on("musique")) (moduleItems["musique"] ??= []).push({ key: "listening", tags: ["Musique"], node: <NowListeningCard /> });
   if (on("livres")) (moduleItems["livres"] ??= []).push({ key: "reading", tags: ["Livres"], node: <ReadingNowCard /> });
   if (on("reactions")) (moduleItems["reactions"] ??= []).push({ key: "discussions", tags: [], node: <DiscussionsCard /> });
-  if (on("marches")) (moduleItems["marches"] ??= []).push({ key: "markets", tags: ["Actualités"], node: <MarketsFlashCard /> });
-  if (on("actualites")) {
-    const items: FeedItem[] = [];
-    if (news.error) items.push({ key: "news-error", tags: ["Actualités"], node: <NewsError onRetry={news.retry} /> });
-    else if (news.loading || !news.articles) items.push({ key: "news-loading", tags: ["Actualités"], node: <NewsSkeleton /> });
-    else { for (const article of news.articles.slice(0, NEWS_IN_FEED)) items.push({ key: article.url, tags: ["Actualités"], node: <NewsCard article={article} user={session.user} onShared={loadPosts} /> }); }
-    moduleItems["actualites"] = items;
-  }
-
-  if (nlArticles.length > 0) {
-    (moduleItems["actualites"] ??= []).push({ key: "newsletter-feed", tags: ["Actualités"], node: <NewsletterFeedCard articles={nlArticles.slice(0, 5)} t={t} /> });
-  }
 
   const sortedModuleItems: FeedItem[] = preferences.moduleOrder.flatMap((id) => moduleItems[id] ?? []);
   const discoveryItems: FeedItem[] = [];
@@ -1127,7 +1042,6 @@ ${socialCardsCss}
     Array.from({ length: Math.max(first.length, second.length) }, (_, i) => [first[i], second[i]]).flat().filter((item): item is FeedItem => Boolean(item));
 
   const feedItems = preferences.order === "social" ? [...postItems, ...sortedModuleItems, ...discoveryItems]
-    : preferences.order === "actualites" ? [...sortedModuleItems, ...postItems, ...discoveryItems]
     : [...interleave(postItems, sortedModuleItems), ...discoveryItems];
   const isVisible = (tags: string[]) => filter === "Tout" || tags.includes(filter);
   const hasVisibleItem = feedItems.some((item) => isVisible(item.tags));
