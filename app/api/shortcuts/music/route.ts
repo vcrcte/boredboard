@@ -2,7 +2,19 @@ import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+// The Shortcut copies `share_url` when the reply has one, and the original link
+// otherwise; iOS Shortcuts can't time out a request, so the server answers
+// within this budget even when a lookup is slow.
+const DEADLINE_MS = 2800;
+
 export async function POST(request: Request) {
+  const timeout = new Promise<NextResponse>((resolve) =>
+    setTimeout(() => resolve(NextResponse.json({ error: 'Partage trop lent, réessaie' }, { status: 503 })), DEADLINE_MS),
+  )
+  return Promise.race([share(request), timeout])
+}
+
+async function share(request: Request) {
   try {
     const body = await request.json()
     const { title, artist, album, platform, token } = body
@@ -45,12 +57,13 @@ export async function POST(request: Request) {
       try {
         // This deployment's own embed route (lib/music.ts format, read by the feed's player card).
         const embedRes = await fetch(`${new URL(request.url).origin}/api/music/embed?url=${encodeURIComponent(url)}`, {
-          signal: AbortSignal.timeout(5000)
+          signal: AbortSignal.timeout(1500)
         })
         if (embedRes.ok) {
           const embedData = await embedRes.json()
           finalTitle = embedData.title || 'Titre inconnu'
           finalArtist = ''
+          // Matching for the share link (/s/<id>) runs on its first view and fills metadata.matches.
           finalMetadata = { ...embedData, url }
         }
       } catch (e) {
@@ -60,7 +73,7 @@ export async function POST(request: Request) {
 
     // A link was sent but not understood: say so instead of posting "Titre inconnu".
     if (body.url && !title && !finalMetadata.embed_url) {
-      return NextResponse.json({ error: 'Lien non reconnu : partage un lien Spotify, Deezer, YouTube ou Apple Music' }, { status: 400 })
+      return NextResponse.json({ error: 'Lien non reconnu : partage un lien Spotify, Deezer, SoundCloud, YouTube ou Apple Music' }, { status: 400 })
     }
 
     if (!finalTitle) finalTitle = 'Titre inconnu'
@@ -72,7 +85,7 @@ export async function POST(request: Request) {
       try {
         const searchRes = await fetch(
           `https://itunes.apple.com/search?term=${encodeURIComponent(finalTitle + ' ' + finalArtist)}&media=music&country=FR&limit=1`,
-          { signal: AbortSignal.timeout(3000) }
+          { signal: AbortSignal.timeout(1000) }
         )
         const searchData = await searchRes.json()
         finalMetadata.artwork = searchData.results?.[0]?.artworkUrl100?.replace('100x100', '300x300') || null
@@ -82,7 +95,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { error } = await supabase.from('posts').insert({
+    const { data: inserted, error } = await supabase.from('posts').insert({
       user_id: userId,
       type: 'musique',
       content: finalArtist ? `J'écoute "${finalTitle}" — ${finalArtist}` : `J'écoute "${finalTitle}"`,
@@ -90,14 +103,17 @@ export async function POST(request: Request) {
       category: 'Musique',
       metadata: finalMetadata,
       likes_count: 0
-    })
+    }).select('id').single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error || !inserted) return NextResponse.json({ error: error?.message ?? 'Erreur serveur' }, { status: 500 })
+
+    const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin
+    const shareUrl = url ? `${origin}/s/${inserted.id}` : null
 
     const successMsg = finalArtist
       ? `${finalTitle} — ${finalArtist} a été partagé avec succès ✓`
       : `${finalTitle} a été partagé avec succès ✓`
-    return NextResponse.json({ success: true, message: successMsg })
+    return NextResponse.json({ success: true, message: successMsg, share_url: shareUrl })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
