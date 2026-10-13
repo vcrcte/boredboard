@@ -1,9 +1,10 @@
 -- Likes counter, cross-user reads and lookup index for interactions.
 --
--- 1. Interactions (likes, comments, reactions) become readable by everyone,
---    like posts already are. The existing "Gérer ses interactions" policy is
---    `for all`, so it also limited SELECT to the author's own rows: nobody saw
---    notifications or other people's comments.
+-- 1. Likes, comments and reactions become readable by everyone, like posts
+--    already are; other types (e.g. 'save' bookmarks) stay private. The
+--    existing "Gérer ses interactions" policy is `for all`, so it also limited
+--    SELECT to the author's own rows: nobody saw notifications or other
+--    people's comments.
 -- 2. posts.likes_count is kept in sync by a trigger. App code cannot update it:
 --    RLS stops a reader from writing someone else's post, so the trigger runs
 --    as security definer.
@@ -12,7 +13,7 @@
 
 drop policy if exists "Interactions visibles par tous" on public.interactions;
 create policy "Interactions visibles par tous" on public.interactions
-  for select using (true);
+  for select using (type in ('like', 'comment', 'reaction'));
 
 create index if not exists interactions_post_type_idx
   on public.interactions (post_id, type);

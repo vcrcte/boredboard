@@ -1,40 +1,31 @@
-import { lookup } from "node:dns/promises";
+import type { IncomingMessage } from "node:http";
+import { get as httpGet } from "node:http";
+import { get as httpsGet } from "node:https";
 import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 import { clientForRequest } from "@/lib/supabase-server";
+import { isPrivateAddress, publicOnlyLookup } from "@/lib/ssrf";
 
 const MAX_REDIRECTS = 3;
+const MAX_HTML_CHARS = 50000;
 
-/** True for loopback, private, link-local, CGNAT and other non-public ranges. */
-function isPrivateAddress(address: string): boolean {
-  if (isIP(address) === 6) {
-    const a = address.toLowerCase();
-    if (a.startsWith("::ffff:")) return isPrivateAddress(a.slice(7));
-    return a === "::" || a === "::1" || a.startsWith("fc") || a.startsWith("fd") || a.startsWith("fe80");
-  }
-  const [x, y] = address.split(".").map(Number);
-  return (
-    x === 0 ||
-    x === 10 ||
-    x === 127 ||
-    (x === 100 && y >= 64 && y <= 127) ||
-    (x === 169 && y === 254) ||
-    (x === 172 && y >= 16 && y <= 31) ||
-    (x === 192 && y === 168) ||
-    x >= 224
-  );
-}
-
-/** Rejects non-http(s) URLs and hosts that resolve to a non-public address. */
-async function isPublicHttpUrl(url: URL): Promise<boolean> {
+/** Rejects non-http(s) URLs and private IP literals (hostnames are checked at connect time). */
+function isAllowedUrl(url: URL): boolean {
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
   const host = url.hostname.replace(/^\[|\]$/g, "");
-  try {
-    const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-    return addresses.length > 0 && addresses.every((a) => !isPrivateAddress(a.address));
-  } catch {
-    return false;
-  }
+  return !isIP(host) || !isPrivateAddress(host);
+}
+
+/** One GET without following redirects. DNS goes through publicOnlyLookup. */
+function requestPage(url: URL, signal: AbortSignal): Promise<IncomingMessage> {
+  const get = url.protocol === "https:" ? httpsGet : httpGet;
+  return new Promise((resolve, reject) => {
+    get(url, {
+      lookup: publicOnlyLookup,
+      signal,
+      headers: { "User-Agent": "BoredBoard/1.0 (link preview)", Accept: "text/html" },
+    }, resolve).on("error", reject);
+  });
 }
 
 /**
@@ -61,59 +52,47 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
     // Follow redirects by hand so every hop is checked against private hosts.
-    let res: Response | null = null;
+    let res: IncomingMessage | null = null;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      if (!(await isPublicHttpUrl(target))) {
-        clearTimeout(timeout);
+      if (!isAllowedUrl(target)) {
         return NextResponse.json({ error: "URL not allowed" }, { status: 400 });
       }
-      res = await fetch(target, {
-        signal: controller.signal,
-        redirect: "manual",
-        headers: {
-          "User-Agent": "BoredBoard/1.0 (link preview)",
-          Accept: "text/html",
-        },
-      });
-      const location = res.headers.get("location");
-      if (res.status < 300 || res.status >= 400 || !location) break;
+      res = await requestPage(target, controller.signal);
+      const status = res.statusCode ?? 0;
+      const location = res.headers.location;
+      if (status < 300 || status >= 400 || !location) break;
+      res.destroy();
       target = new URL(location, target);
       res = null;
     }
-    clearTimeout(timeout);
 
     if (!res) {
       return NextResponse.json({ error: "Too many redirects" }, { status: 502 });
     }
-    if (!res.ok) {
+    const status = res.statusCode ?? 0;
+    if (status < 200 || status >= 300) {
+      res.destroy();
       return NextResponse.json({ error: "Failed to fetch URL" }, { status: 502 });
     }
 
-    const contentType = res.headers.get("content-type") ?? "";
+    const contentType = res.headers["content-type"] ?? "";
     if (!contentType.includes("text/html")) {
+      res.destroy();
       return NextResponse.json({ error: "Not an HTML page" }, { status: 422 });
     }
 
-    // Read first 50KB only to avoid downloading huge pages
-    const reader = res.body?.getReader();
-    if (!reader) {
-      return NextResponse.json({ error: "No response body" }, { status: 502 });
-    }
-
+    // Read the first 50KB only to avoid downloading huge pages
     let html = "";
-    const decoder = new TextDecoder();
-    let done = false;
-    while (!done && html.length < 50000) {
-      const { value, done: d } = await reader.read();
-      done = d;
-      if (value) html += decoder.decode(value, { stream: true });
+    res.setEncoding("utf8");
+    for await (const chunk of res) {
+      html += chunk;
+      if (html.length >= MAX_HTML_CHARS) break;
     }
-    reader.cancel();
+    res.destroy();
 
     // Parse OG tags with regex (no DOM parser needed for simple extraction)
     const getMeta = (property: string): string | null => {
@@ -169,7 +148,12 @@ export async function GET(request: NextRequest) {
       },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    if ((err as { code?: string }).code === "EPRIVATE") {
+      return NextResponse.json({ error: "URL not allowed" }, { status: 400 });
+    }
+    // Don't echo the error: it can name internal hosts or addresses.
+    return NextResponse.json({ error: "Failed to fetch preview" }, { status: 502 });
+  } finally {
+    clearTimeout(timeout);
   }
 }

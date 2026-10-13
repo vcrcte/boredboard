@@ -65,7 +65,9 @@ export function getInitials(name: string | null, email: string | undefined) {
 // ── Notification types ───────────────────────────────────────────────────
 type Notification = {
   id: string;
-  type: "like" | "comment" | "follow";
+  type: "like" | "comment" | "reaction" | "follow";
+  /** The emoji, for reactions. */
+  emoji?: string;
   actor_name: string;
   message: string;
   created_at: string;
@@ -120,7 +122,8 @@ function NotificationBell({ userId }: { userId: string }) {
         const actorName = actor?.name ?? actor?.username ?? "Quelqu'un";
         return {
           id: i.id,
-          type: i.type as "like" | "comment",
+          type: i.type as "like" | "comment" | "reaction",
+          emoji: i.type === "reaction" ? i.content ?? undefined : undefined,
           actor_name: actorName,
           message: i.type === "like"
             ? `${actorName} a aimé ton post`
@@ -227,7 +230,7 @@ function NotificationBell({ userId }: { userId: string }) {
                   style={{ padding: "10px 16px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}
                 >
                   <span style={{ fontSize: 18, marginTop: 2 }}>
-                    {n.type === "like" ? "♥" : n.type === "comment" ? "\u{1F4AC}" : "\u{1F464}"}
+                    {n.type === "like" ? "♥" : n.type === "comment" ? "\u{1F4AC}" : n.type === "reaction" ? n.emoji ?? "\u{1F44D}" : "\u{1F464}"}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p style={{ fontSize: 12, color: "#1C1A15", lineHeight: 1.4 }}>{n.message}</p>
