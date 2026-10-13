@@ -3,6 +3,7 @@
 import { createContext, useContext, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getInitials } from "@/components/Navbar";
+import { displayedLikes } from "@/lib/likes";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -265,7 +266,7 @@ export default function SocialActions({
     }
   };
 
-  const likeCount = likes + (liked ? 1 : 0);
+  const likeCount = displayedLikes(likes, existing?.like ?? false, liked);
 
   return (
     <div>
