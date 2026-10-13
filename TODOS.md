@@ -18,6 +18,56 @@ Parked sections come from the 2026-10-13 CEO review (SCOPE REDUCTION): boredboar
 **Priority:** P2
 **Depends on:** None
 
+## QA (2026-10-13)
+
+### Run the 2026-10-04 migration in Supabase (Medium, console/functional)
+
+**What:** Run `lib/migrations/2026-10-04-dashboard-social.sql` in the Supabase SQL editor.
+
+**Why:** Production has no `profiles.preferences` or `profiles.lastfm_username`: every page logs 400s on `/rest/v1/profiles`, dashboard preferences are only saved on the device, and Last.fm features fail.
+
+**Context:** Found by /qa on localhost:3000 (dashboard, profile, settings). Repro: open /dashboard signed in, check the console for `400` on `profiles?select=preferences`.
+
+**Effort:** S
+**Priority:** P1
+**Depends on:** None
+
+### Tendances count does not match the posts (Low, content)
+
+**What:** "#Musique 17 posts" in the dashboard's Tendances while the profile shows 9 music posts.
+
+**Why:** Misleading numbers on the main screen.
+
+**Context:** Found by /qa. Repro: /dashboard right column vs /profile counters.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** None
+
+### "Mes thèmes" no longer filters anything (Low, UX)
+
+**What:** Remove or repurpose the themes section (customizer + dashboard sidebar).
+
+**Why:** It says "Le contenu sera filtré selon tes centres d'intérêt", but themes only filtered the news, which is parked.
+
+**Context:** components/dashboard/Customizer.tsx (Mes thèmes), app/dashboard/page.tsx sidebar.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** None
+
+### Profile comment counts are always 0 (Low, content)
+
+**What:** Pass the real comment count instead of `comments={0}` in app/profile/page.tsx.
+
+**Why:** Comments exist but the profile shows 0.
+
+**Context:** Found by /qa. Needs the interactions read policy (lib/migrations/2026-10-13-likes-and-interactions.sql) to count other people's comments.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** 2026-10-13 likes and interactions migration
+
 ## Parked sections
 
 ### Markets (portfolio, price alerts, market data)
