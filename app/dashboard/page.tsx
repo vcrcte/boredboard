@@ -149,6 +149,7 @@ const navItems: { icon: string; label: string; filter?: string; href?: string }[
   { icon: "◎", label: "Podcasts", href: "/podcasts" },
   { icon: "↗", label: "Newsletter", href: "/newsletter" },
   { icon: "▣", label: "Actualités", href: "/actualites" },
+  { icon: "▶", label: "Séries & Vidéos", href: "/series" },
 ];
 
 // spaces is now computed inside the component with dynamic counts
