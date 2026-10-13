@@ -20,3 +20,8 @@ Available skills:
 - Debugging & security: `/investigate`, `/cso`, `/codex`
 - Safety: `/careful`, `/freeze`, `/guard`, `/unfreeze`
 - Maintenance: `/gstack-upgrade`
+
+## Testing
+
+- Run tests: `npm test` (Vitest, `vitest run`). Tests live next to the code as `*.test.ts` (e.g. `lib/feed-algorithm.test.ts`).
+- CI (`.github/workflows/check.yml`) runs `npm run lint`, `npx tsc --noEmit` and `npm test` on every push to main.
