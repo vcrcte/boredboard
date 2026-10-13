@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Navbar, { Logo } from "@/components/Navbar";
 import { ensureProfile } from "@/lib/profile";
+import { claimReferral } from "@/lib/referral";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -130,6 +131,7 @@ export default function Signup() {
       }
     }
 
+    await claimReferral(data.user.id);
     router.push("/onboarding");
   };
 

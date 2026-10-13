@@ -32,6 +32,7 @@ import {
   type Preferences,
 } from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
+import { claimReferral } from "@/lib/referral";
 import { avatarTones } from "@/lib/sample-data";
 import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
@@ -752,7 +753,7 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (type === "musique" && !musicEmbed) { setError("Ajoute un lien Spotify, Apple Music, Deezer ou YouTube reconnu."); return; }
+    if (type === "musique" && !musicEmbed) { setError("Ajoute un lien Spotify, Apple Music, Deezer, SoundCloud ou YouTube reconnu."); return; }
     const trimmedUrl = type === "article" ? url.trim() : type === "musique" ? musicUrl.trim() : "";
     if (trimmedUrl && !safeUrl(trimmedUrl)) { setError("Le lien doit commencer par http:// ou https://"); return; }
     setSubmitting(true);
@@ -986,6 +987,8 @@ ${socialCardsCss}
       const error = user ? await ensureProfile(user) : null;
       if (cancelled) return;
       setProfileError(error);
+      // Accounts confirmed by email reach the dashboard first: record their referral here.
+      if (!error) void claimReferral(userId);
       const { data } = await supabase.from("profiles").select("name, username, location").eq("id", userId).maybeSingle();
       if (!cancelled) setProfile(data);
       const remote = await readRemotePreferences(userId);

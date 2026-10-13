@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import Navbar, { Logo } from "@/components/Navbar";
+import { rememberReferral } from "@/lib/referral";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F7F4EE";
@@ -15,13 +16,16 @@ const GEORGIA = "Georgia, 'Times New Roman', serif";
 const DIM = "rgba(28,26,21,0.45)";
 const GREEN = "#16A34A";
 const RED = "#C0392B";
-const SHORTCUT_ICLOUD_URL = "https://www.icloud.com/shortcuts/3025a45a81ac4b83951d76aca9ffa814";
-// Second Shortcut, from the share sheet: it sends the shared link to the same route.
-const SHORTCUT_SHARE_URL = "https://www.icloud.com/shortcuts/b217b911bcc14177b3347b4b40f794dc";
+// Signed Shortcut files (built from the former iCloud ones, see scripts/shortcuts-README.md).
+// Each asks for the person's own code at install time.
+const SHORTCUT_ICLOUD_URL = "/shortcuts/boredboard-music.shortcut";
+// Second Shortcut, from the share sheet: it posts the shared link and copies its /s/<id> share link.
+const SHORTCUT_SHARE_URL = "/shortcuts/boredboard-share.shortcut";
 
 const sharePlatforms = [
   { label: "Spotify", background: "rgba(30,215,96,0.08)", color: "#1DB954" },
   { label: "Deezer", background: "rgba(239,100,0,0.08)", color: "#EF6400" },
+  { label: "SoundCloud", background: "rgba(255,85,0,0.08)", color: "#FF5500" },
   { label: "YouTube", background: "rgba(255,0,0,0.08)", color: "#FF0000" },
   { label: "Apple Music", background: "rgba(252,60,68,0.08)", color: "#FC3C44" },
 ];
@@ -96,6 +100,8 @@ export default function Raccourci() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Arrived from a shared link's "Partage le tien": remember which post, for the account created next.
+    rememberReferral(new URLSearchParams(window.location.search).get("ref"));
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const {
       data: { subscription },
@@ -165,7 +171,7 @@ export default function Raccourci() {
             <section className="mt-8" style={card}>
               <StepBadge>Étape 1</StepBadge>
               <h2 style={{ fontSize: 16, fontWeight: 500, color: TEXT }}>Installe le Raccourci</h2>
-              <p className="mb-4 mt-2" style={desc}>Clique le bouton ci-dessous depuis ton iPhone. Le raccourci s&apos;installe automatiquement.</p>
+              <p className="mb-4 mt-2" style={desc}>Ouvre ce bouton depuis ton iPhone. À l&apos;installation, il te demande ton code BoredBoard : affiche-le et copie-le d&apos;abord (étape 2 ci-dessous).</p>
               <a
                 href={SHORTCUT_ICLOUD_URL}
                 target="_blank"
@@ -184,7 +190,7 @@ export default function Raccourci() {
                 NOUVEAU
               </span>
               <h2 style={{ fontSize: 16, fontWeight: 500, color: TEXT }}>Partage depuis Spotify, Deezer ou YouTube</h2>
-              <p className="mb-4 mt-2" style={desc}>Appuie sur Partager dans ton app → choisis BoredBoard Share → c&apos;est posté.</p>
+              <p className="mb-4 mt-2" style={desc}>Appuie sur Partager dans ton app → choisis BoredBoard Share → c&apos;est posté, et le lien BoredBoard est copié : colle-le dans le groupe, chacun l&apos;ouvre dans son appli.</p>
               <a
                 href={SHORTCUT_SHARE_URL}
                 target="_blank"
