@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { detectPlatform, type MusicEmbed, type MusicKind } from "@/lib/music";
+import { detectPlatform, expandShortLink, isShortLink, type MusicEmbed, type MusicKind } from "@/lib/music";
+import { parseSoundCloudTitle, parseSpotifyPage } from "@/lib/music-match";
 
 // Title and cover of a shared music link, from each platform's public,
 // key-less endpoints. The platforms' own embed HTML is never passed on.
@@ -18,13 +19,40 @@ async function spotify(url: URL): Promise<MusicEmbed | null> {
   if (!kind) return null;
   const data = await getJson(`https://open.spotify.com/oembed?url=${encodeURIComponent(url.href)}`);
   if (!data?.title) return null;
+  // oEmbed has no artist; a track's page carries it in its meta tags (no API key).
+  let artist: string | undefined;
+  if (kind === "track") {
+    const page = await fetch(`https://open.spotify.com${url.pathname}`, { ...CACHE, headers: { "User-Agent": "Mozilla/5.0" } })
+      .then((res) => (res.ok ? res.text() : ""))
+      .catch(() => "");
+    artist = parseSpotifyPage(page)?.artist || undefined;
+  }
   return {
     platform: "spotify",
     type: kind,
-    title: data.title,
+    title: artist ? `${data.title} — ${artist}` : data.title,
+    artist,
     thumbnail: data.thumbnail_url ?? null,
     embed_url: data.iframe_url || url.href,
     provider: "Spotify",
+  };
+}
+
+async function soundcloud(url: URL): Promise<MusicEmbed | null> {
+  // soundcloud.com/<user>/<track> or /<user>/sets/<playlist>
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts.length < 2) return null;
+  const data = await getJson(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(`https://soundcloud.com${url.pathname}`)}`);
+  if (!data?.title) return null;
+  const { title, artist } = parseSoundCloudTitle(data.title, data.author_name);
+  return {
+    platform: "soundcloud",
+    type: parts[1] === "sets" ? "playlist" : "track",
+    title: artist ? `${title} — ${artist}` : title,
+    artist: artist || undefined,
+    thumbnail: data.thumbnail_url ?? null,
+    embed_url: `https://w.soundcloud.com/player/?url=${encodeURIComponent(`https://soundcloud.com${url.pathname}`)}&color=%23ff5500&visual=true`,
+    provider: "SoundCloud",
   };
 }
 
@@ -111,7 +139,7 @@ async function youtube(url: URL): Promise<MusicEmbed | null> {
   };
 }
 
-const RESOLVERS = { spotify, apple, deezer, youtube };
+const RESOLVERS = { spotify, apple, deezer, soundcloud, youtube };
 
 export async function GET(request: Request) {
   const raw = new URL(request.url).searchParams.get("url");
@@ -123,13 +151,17 @@ export async function GET(request: Request) {
   } catch {
     return NextResponse.json({ error: "Lien invalide" }, { status: 400 });
   }
-  const platform = url.protocol === "https:" || url.protocol === "http:" ? detectPlatform(url) : null;
+  if (url.protocol !== "https:" && url.protocol !== "http:") return NextResponse.json({ error: "Lien invalide" }, { status: 400 });
+  // Mobile apps often share short links (spotify.link, deezer.page.link, on.soundcloud.com).
+  if (isShortLink(url)) url = (await expandShortLink(url).catch(() => null)) ?? url;
+  const platform = detectPlatform(url);
   if (!platform) return NextResponse.json({ error: "Plateforme non supportée" }, { status: 400 });
 
   try {
     const embed = await RESOLVERS[platform](url);
     if (!embed) return NextResponse.json({ error: "Morceau introuvable" }, { status: 404 });
-    return NextResponse.json(embed);
+    // The full platform link (after expanding a short link), used for cross-service matching.
+    return NextResponse.json({ ...embed, source_url: url.href });
   } catch {
     return NextResponse.json({ error: "Impossible de récupérer les métadonnées" }, { status: 502 });
   }

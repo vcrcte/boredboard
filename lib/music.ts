@@ -1,7 +1,7 @@
 // Music links shared in posts: the metadata stored with a post (posts.metadata)
 // and the platform list, shared by the embed route and the pages.
 
-export type MusicPlatform = "spotify" | "apple" | "deezer" | "youtube";
+export type MusicPlatform = "spotify" | "apple" | "deezer" | "soundcloud" | "youtube";
 
 export type MusicKind = "track" | "album" | "playlist";
 
@@ -10,6 +10,8 @@ export interface MusicEmbed {
   /** Missing on posts saved before albums and playlists were supported: a single track. */
   type?: MusicKind;
   title: string;
+  /** Read separately from the title where the platform gives it (Spotify, SoundCloud). */
+  artist?: string;
   thumbnail: string | null;
   embed_url: string;
   provider: string;
@@ -19,6 +21,7 @@ export const PLATFORMS: Record<MusicPlatform, { label: string; background: strin
   spotify: { label: "Spotify", background: "rgba(30,215,96,0.1)", color: "#1DB954", hosts: ["open.spotify.com", "spotify.com"] },
   apple: { label: "Apple Music", background: "rgba(252,60,68,0.1)", color: "#FC3C44", hosts: ["music.apple.com"] },
   deezer: { label: "Deezer", background: "rgba(239,100,0,0.1)", color: "#EF6400", hosts: ["deezer.com", "www.deezer.com"] },
+  soundcloud: { label: "SoundCloud", background: "rgba(255,85,0,0.1)", color: "#FF5500", hosts: ["soundcloud.com"] },
   youtube: {
     label: "YouTube Music",
     background: "rgba(255,0,0,0.1)",
@@ -34,6 +37,35 @@ export function detectPlatform(url: URL): MusicPlatform | null {
     PLATFORMS[platform].hosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`)),
   );
   return entry ?? null;
+}
+
+/**
+ * Short links the mobile apps share instead of the full URL. They redirect to
+ * one of the platforms above, so they are expanded before detectPlatform.
+ */
+export const SHORT_LINK_HOSTS = ["spotify.link", "deezer.page.link", "link.deezer.com", "on.soundcloud.com"];
+
+export function isShortLink(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  return SHORT_LINK_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+}
+
+/**
+ * Follows a short link's redirects (at most 3) until it reaches a supported
+ * platform. Only short-link hosts are requested, so this can't be pointed at an
+ * arbitrary server. Returns null when it ends anywhere else.
+ */
+export async function expandShortLink(url: URL): Promise<URL | null> {
+  let current = url;
+  for (let hop = 0; hop < 3; hop++) {
+    if (detectPlatform(current)) return current;
+    if (!isShortLink(current)) return null;
+    const res = await fetch(current, { redirect: "manual", signal: AbortSignal.timeout(3000) });
+    const location = res.headers.get("location");
+    if (!location) return null;
+    current = new URL(location, current);
+  }
+  return detectPlatform(current) ? current : null;
 }
 
 /** Only https links are rendered, so a hand-edited metadata row can't inject a script URL. */
@@ -56,6 +88,7 @@ export function parseEmbed(value: unknown): MusicEmbed | null {
     platform: raw.platform,
     type: raw.type === "album" || raw.type === "playlist" ? raw.type : "track",
     title: raw.title,
+    artist: typeof raw.artist === "string" ? raw.artist : undefined,
     thumbnail: safeHttps(raw.thumbnail),
     embed_url: embedUrl,
     provider: PLATFORMS[raw.platform].label,
