@@ -18,6 +18,20 @@ Parked sections come from the 2026-10-13 CEO review (SCOPE REDUCTION): boredboar
 **Priority:** P2
 **Depends on:** None
 
+## Universal share link (2026-10-13)
+
+### Chrome extension: copy the universal link (Low)
+
+**What:** Make the extension (extension/background.js → app/api/posts/music) return and copy `/s/<post id>` like the iOS Shortcut.
+
+**Why:** Deferred in the eng review (D4): 90% of curators share from iPhone; desktop shares keep working but don't get a universal link.
+
+**Context:** Universal link plan in docs/designs/first-20-users.md; capture contract in app/api/shortcuts/music/route.ts after task U4.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** U4 (shortcut route returns share_url)
+
 ## QA (2026-10-13)
 
 ### Run the 2026-10-04 migration in Supabase (Medium, console/functional)

@@ -15,6 +15,7 @@ The founder asked: "how do i get my first 20 users?" boredboard is live (social 
 
 ## Status Quo
 - Friends already share tracks and links in group chats (WhatsApp, Messenger, Discord). That is the habit to work with, not against.
+- Founder update (2026-10-13): about 90% of curators are on iPhone, and the groups mix Spotify, Apple Music, SoundCloud and Deezer links. This meets condition 1 of the decision rule (build B).
 - What the group chat does badly, from the session: links get buried, nobody can find last month's track, nobody sees each person's taste, and in mixed groups a Spotify link is useless to a Deezer or Apple Music listener. The last point is the second opinion's; it has not been confirmed with a real user yet.
 
 ## Target User & Narrowest Wedge
@@ -23,7 +24,7 @@ The founder asked: "how do i get my first 20 users?" boredboard is live (social 
 
 ## Constraints
 - Solo founder; existing stack: Next.js on Vercel, Supabase, iOS Shortcut route (`app/api/shortcuts/music`), Chrome extension, `lib/music.ts`, `/api/og`.
-- The Odesli/song.link public API is closed (`PUBLIC_API_ACCESS_DEPRECATED`, checked 2026-10-13). Cross-service matching must be built in-house: Deezer API and iTunes Search (free, no key), Spotify Web API (free, needs app credentials), and a YouTube search link.
+- The Odesli/song.link public API is closed (`PUBLIC_API_ACCESS_DEPRECATED`, checked 2026-10-13). Cross-service matching must be built in-house: Deezer API and iTunes Search (free, no key), Spotify track page metadata for the artist (no key; eng review D2, no Spotify Web API), SoundCloud oEmbed (no key; returns "Title by Uploader"), and search links for YouTube and SoundCloud.
 - Receivers have no account and must not need one.
 - Capture works only on iOS (Shortcut) and desktop Chrome (extension); Android curators can't take part in this test.
 
@@ -49,14 +50,16 @@ Independent Claude subagent (cold read, no conversation; Codex not installed):
 ## Recommended Approach
 **B: a universal share link, then a 2-week test with 5 curators.** Wireframe: `/var/folders/dp/_9m3s06n48q7t5z9828ngwdw0000gn/T/gstack-sketch.afFIZ9/sketch.png` (three states: the preview in the group chat, the link opened by a receiver, the curator's Shortcut).
 
-1. **Capture (curator), synchronous and fast:** the Shortcut or extension sends the source link; the server saves the post, creates a random, non-enumerable short id, and returns `…/s/<id>` immediately. It does not wait for cross-service matching. Latency budget: 1.5 s. The 3 s limit is enforced on the server: if saving the post takes longer, the server answers before 3 s with the original link. iOS Shortcuts have no request timeout or error handling, so the Shortcut copies the response only if it contains a `/s/` link and otherwise copies the original link from the share sheet, so sharing never breaks.
-2. **Resolve, asynchronous:** after the response is sent (Vercel `after`/`waitUntil`), the server takes the source link (Spotify, Apple Music or Deezer), gets artist, title, duration and ISRC when available, and looks up the same track on Deezer (`track/isrc:` first, then search), Apple (iTunes Search) and Spotify (Web API: ISRC search first, then text search). Each service has a 4 s timeout. Matches are stored with the post.
+1. **Capture (curator), synchronous and fast:** the Shortcut sends the source link (Spotify, Apple Music, Deezer or SoundCloud; the Chrome extension is deferred, D4); the server saves the post and returns `…/s/<post id>` immediately (the post uuid is the link id, D3). It does not wait for cross-service matching. Latency budget: 1.5 s. The 3 s limit is enforced on the server: if saving the post takes longer, the server answers before 3 s with the original link. iOS Shortcuts have no request timeout or error handling, so the Shortcut copies the response only if it contains a `/s/` link and otherwise copies the original link from the share sheet, so sharing never breaks.
+2. **Resolve, on first view (eng review D6; Next 14.2 has no `after()`):** the first request to `/s/<id>` (usually the chat app's preview bot, right when the curator pastes the link) takes the source link (Spotify, Apple Music, Deezer or **SoundCloud**), gets artist and title (Spotify: page metadata; SoundCloud: oEmbed "Title by Uploader"), plus duration and ISRC when the source gives them, and looks up the same track on Deezer (`track/isrc:` first, then search) and Apple (iTunes Search). Each service has a 4 s timeout. Matches are merged into `posts.metadata.matches`; services still missing are retried on later views.
+   - **SoundCloud (eng review D1):** accepted as a source (a SoundCloud share opens on SoundCloud first; many SoundCloud-only tracks, mixes and edits, will have no match elsewhere and get search links) and as a destination button (a SoundCloud search link for shares from other apps).
+   - **Spotify as a destination:** the exact track only when the share came from Spotify; otherwise a Spotify search link (no Spotify API, D2).
    - **Match acceptance:** exact ISRC match, or else normalized artist and title equal (case, accents, "feat." and "- Remastered" suffixes stripped) and duration within ±3 s. Anything else is not a match, and that service gets a search link. Each stored match records its method (`isrc`, `text+duration`, `search-fallback`), so wrong matches can be audited.
    - **YouTube:** always a search link (`youtube.com/results?search_query=artist+title`); no API in this test.
 3. **Preview:** the OG image (`@vercel/og`) shows the cover, title, artist and "partagé par {name}". The weekly count is listed with the minor findings.
 4. **Receiver page (`/s/<id>`, no account):**
    - **Primary button:** on a first visit (no stored choice), the sharer's source service. On later visits, the receiver's last choice, stored in localStorage only (no cookie, no server-side id). Other services are an equal row of buttons below.
-   - **Link formats:** plain https URLs only (`open.spotify.com/track/…`, `deezer.com/track/…`, `music.apple.com/…?i=…`, YouTube search), never custom app schemes. Inside in-app browsers these may open the web player instead of the app; that's accepted for the test. If matching is still pending or failed, the button opens that service's search for "artist title".
+   - **Link formats:** plain https URLs only (`open.spotify.com/track/…`, `deezer.com/track/…`, `music.apple.com/…?i=…`, `soundcloud.com/…`, YouTube and SoundCloud searches), never custom app schemes. Inside in-app browsers these may open the web player instead of the app; that's accepted for the test. If matching is still pending or failed, the button opens that service's search for "artist title".
    - **Below:** the sharer's last 8 tracks, styled as in DESIGN.md, and "Partage le tien → installer le raccourci".
    - **Referral path:** "Partage le tien" goes to `/raccourci?ref=<post id>`. That page stores the ref in localStorage, and the signup page writes it to the new profile (`profiles.referred_by_post`). The iCloud Shortcut link itself carries no ref; attribution happens at account creation, which every capture needs.
    - **Visibility:** the page and the strip show only posts readable by anyone (all posts are public today; the `posts` read policy is `using (true)`). If private posts are added later, they are excluded and get no share link. Curators are told at onboarding that their shelf is visible to anyone who has the link.
@@ -76,7 +79,7 @@ Test group: 5 curators, not counting the founder, all on iOS or desktop Chrome. 
 - At least 3 of the 5 share on boredboard on their own on at least 5 different days. This is premise 1.
 - boredboard links make up at least 30% of the music links those curators post in their groups (they send chat screenshots). This is the threshold set by the second opinion.
 - At least 1 new account per curator makes its first capture with a referral: the "Partage le tien" install link carries `?ref=<post id>`, and the new account stores it at signup. That ties the new account to the curator whose link they came from.
-- At least 80% of receiver taps on Spotify, Deezer and Apple Music buttons, computed from each tap's recorded match method, open an accepted match (`isrc` or `text+duration`) rather than a search fallback. YouTube taps are excluded, because YouTube is always a search link in this test.
+- At least 80% of receiver taps on Deezer and Apple Music buttons, computed from each tap's recorded match method, open an accepted match (`isrc` or `text+duration`) rather than a search fallback. Spotify (exact only when the share came from Spotify; no Spotify API, eng review D2/D7), YouTube and SoundCloud buttons are search links otherwise; their tap counts are reported separately.
 
 If these are met, the next step is the next 15 users through the same groups. If not, the reason (habit, friction, matching) decides what to change before any growth effort.
 
