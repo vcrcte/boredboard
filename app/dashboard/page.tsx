@@ -94,7 +94,8 @@ type Profile = { name: string | null; username: string; location: string | null 
 
 type OgData = { title: string | null; description: string | null; image: string | null; domain: string | null; siteName: string | null };
 
-const POST_SELECT = "*, profiles (id, name, username, avatar_url)";
+// The FK is named because profiles.referred_by_post also links the two tables (2026-10-14 migration).
+const POST_SELECT = "*, profiles!posts_user_id_fkey (id, name, username, avatar_url)";
 
 const filters = ["Tout", "Actualités", "Musique", "Livres", "Découvertes", "Science", "Art"];
 

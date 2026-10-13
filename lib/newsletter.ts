@@ -299,7 +299,7 @@ export async function buildDigestPreview(
   if (followIds.length) {
     const { data: netPosts } = await supabase
       .from("posts")
-      .select("type, content, url, created_at, profiles (name, username)")
+      .select("type, content, url, created_at, profiles!posts_user_id_fkey (name, username)")
       .in("user_id", followIds)
       .gte("created_at", weekAgo)
       .order("created_at", { ascending: false })

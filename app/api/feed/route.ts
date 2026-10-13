@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   // ── 1. Fetch all posts (recent 60, we'll score and return top 30) ────────
   const { data: posts, error: postsErr } = await supabase
     .from("posts")
-    .select("id, user_id, type, content, url, category, likes_count, created_at, metadata, profiles (id, name, username, avatar_url)")
+    .select("id, user_id, type, content, url, category, likes_count, created_at, metadata, profiles!posts_user_id_fkey (id, name, username, avatar_url)")
     .not("content", "ilike", "%Morceau actuel%")
     .not("content", "ilike", "%Test du Raccourci%")
     .order("created_at", { ascending: false })

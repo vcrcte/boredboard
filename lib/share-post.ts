@@ -49,7 +49,7 @@ async function loadRow(id: string): Promise<Row | null> {
   const db = serviceClient() ?? anonClient();
   const { data } = await db
     .from("posts")
-    .select("id, user_id, type, url, content, metadata, profiles (name, username)")
+    .select("id, user_id, type, url, content, metadata, profiles!posts_user_id_fkey (name, username)")
     .eq("id", id)
     .maybeSingle();
   return data && (data as Row).type === "musique" ? (data as Row) : null;
