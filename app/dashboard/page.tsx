@@ -14,26 +14,31 @@ import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import Navbar, { getInitials } from "@/components/Navbar";
 import SharedMusicCard from "@/components/MusicCard";
+import NewsCard, { NewsError, NewsSkeleton } from "@/components/NewsCard";
 import Customizer from "@/components/dashboard/Customizer";
 import Actions, { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
 import {
   DiscussionsCard,
+  MarketsFlashCard,
   NowListeningCard,
   ReadingNowCard,
   socialCardsCss,
 } from "@/components/dashboard/SocialCards";
 import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
+import { useNews } from "@/lib/news";
 import {
   DEFAULT_PREFERENCES,
   readLocalPreferences,
   readRemotePreferences,
   savePreferences,
+  themesQuery,
   type ModuleId,
   type Preferences,
 } from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
-import { claimReferral } from "@/lib/referral";
 import { avatarTones } from "@/lib/sample-data";
+import { getUserSubscriptions, NEWSLETTER_SOURCES } from "@/lib/newsletter";
+import { getUserPodcastSubscriptions } from "@/lib/podcasts";
 import { getFollowing, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
@@ -92,12 +97,24 @@ type Post = {
 
 type Profile = { name: string | null; username: string; location: string | null };
 
+type NewsletterArticle = {
+  title: string;
+  description: string;
+  url: string;
+  source_id: string;
+  source_name: string;
+  source_icon: string;
+  source_color: string;
+  theme: string;
+  published_at: string;
+};
+
 type OgData = { title: string | null; description: string | null; image: string | null; domain: string | null; siteName: string | null };
 
-// The FK is named because profiles.referred_by_post also links the two tables (2026-10-14 migration).
-const POST_SELECT = "*, profiles!posts_user_id_fkey (id, name, username, avatar_url)";
+const NEWS_IN_FEED = 3;
+const POST_SELECT = "*, profiles (id, name, username, avatar_url)";
 
-const filters = ["Tout", "Actualités", "Musique", "Livres", "Découvertes", "Science", "Art"];
+const filters = ["Tout", "Actualités", "Musique", "Livres", "Podcasts", "Découvertes", "Philo", "Science", "Art"];
 
 const postTypes: { value: PostType; label: string; verb: string; filter: string }[] = [
   { value: "article", label: "Article", verb: "partage un article", filter: "Actualités" },
@@ -118,6 +135,7 @@ const tones = {
 const categories: { label: string; tone: keyof typeof tones; filter?: string }[] = [
   { label: "Géopolitique", tone: "green" },
   { label: "Histoire", tone: "gold" },
+  { label: "Philosophie", tone: "indigo", filter: "Philo" },
   { label: "Science", tone: "green", filter: "Science" },
   { label: "Art", tone: "rose", filter: "Art" },
   { label: "Musique", tone: "violet" },
@@ -126,13 +144,18 @@ const categories: { label: string; tone: keyof typeof tones; filter?: string }[]
 ];
 
 const navItems: { icon: string; label: string; filter?: string; href?: string }[] = [
-  { icon: "◉", label: "Mon espace", filter: "Tout" },
-  { icon: "✦", label: "Explorer", href: "/explore" },
-  { icon: "♪", label: "Musique", filter: "Musique" },
-  { icon: "📕", label: "Livres", href: "/livres" },
+  { icon: "\u{1F3E0}", label: "Mon espace", filter: "Tout" },
+  { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
+  { icon: "\u{1F3B5}", label: "Musique", filter: "Musique" },
+  { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
+  { icon: "✉️", label: "Newsletter", href: "/newsletter" },
 ];
 
-// spaces is now computed inside the component with dynamic counts
+const spaces: { icon: string; title: string; detail: string; filter?: string; href?: string }[] = [
+  { icon: "\u{1F3B5}", title: "Musique", detail: "4 titres", filter: "Musique" },
+  { icon: "\u{1F4D6}", title: "Livres", detail: "en cours", href: "/livres" },
+  { icon: "\u{1F399}", title: "Podcasts", detail: "favoris", href: "/podcasts" },
+];
 
 function timeAgo(date: string) {
   const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
@@ -200,13 +223,8 @@ function useOgPreview(url: string | null) {
   useEffect(() => {
     if (!url) return;
     let cancelled = false;
-    supabase.auth.getSession()
-      .then(({ data }) => {
-        const token = data.session?.access_token;
-        if (!token) return null;
-        return fetch(`/api/og?url=${encodeURIComponent(url)}`, { headers: { Authorization: `Bearer ${token}` } });
-      })
-      .then((r) => r?.ok ? r.json() : null)
+    fetch(`/api/og?url=${encodeURIComponent(url)}`)
+      .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (!cancelled && data) setOg(data); })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -408,10 +426,10 @@ function ComposePrompt({ initials, displayName, onOpen, t }: { initials: string;
       </div>
       <div className="mt-3 flex items-center justify-around" style={{ borderTop: `1px solid ${t.black(0.05)}`, paddingTop: 10 }}>
         {[
-          { icon: "♪", label: "Musique", color: "#6B3FD4" },
-          { icon: "📕", label: "Livre", color: "#3B6D11" },
-          { icon: "▣", label: "Article", color: "#2A3560" },
-          { icon: "¶", label: "Réflexion", color: "#993556" },
+          { icon: "\u{1F3B5}", label: "Musique", color: "#6B3FD4" },
+          { icon: "\u{1F4D6}", label: "Livre", color: "#3B6D11" },
+          { icon: "\u{1F4F0}", label: "Article", color: "#2A3560" },
+          { icon: "\u{1F4AD}", label: "Réflexion", color: "#993556" },
         ].map((item) => (
           <button key={item.label} type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }}
             className="db-hover flex items-center" style={{ gap: 6, fontSize: 12, color: item.color, padding: "4px 10px", borderRadius: 8, fontWeight: 500 }}>
@@ -438,7 +456,16 @@ function TrendingTopics({ posts, t }: { posts: Post[] | null; t: typeof LIGHT })
     }
   }
 
-  const trends = [...categoryCounts.entries()]
+  // Fallback static trends if no posts
+  const staticTrends = [
+    { tag: "#NouvelleVague", posts: 12, category: "Cinéma" },
+    { tag: "#PrixGoncourt", posts: 8, category: "Littérature" },
+    { tag: "#Impressionnisme", posts: 6, category: "Art" },
+    { tag: "#PhiloContemporaine", posts: 5, category: "Philo" },
+    { tag: "#JazzManouche", posts: 4, category: "Musique" },
+  ];
+
+  const dynamicTrends = [...categoryCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([cat, count]) => ({
@@ -447,9 +474,7 @@ function TrendingTopics({ posts, t }: { posts: Post[] | null; t: typeof LIGHT })
       category: cat,
     }));
 
-  if (trends.length === 0) {
-    return <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}>Pas encore de tendances. Les sujets populaires apparaîtront ici au fil des publications.</p>;
-  }
+  const trends = dynamicTrends.length >= 3 ? dynamicTrends : staticTrends;
 
   return (
     <div className="flex flex-col" style={{ gap: 0 }}>
@@ -467,55 +492,27 @@ function TrendingTopics({ posts, t }: { posts: Post[] | null; t: typeof LIGHT })
   );
 }
 
-// ── Suggested profiles (real data from Supabase) ────────────────────────────
-function SuggestedProfiles({ t, userId }: { t: typeof LIGHT; userId: string | undefined }) {
-  const [suggestions, setSuggestions] = useState<{ id: string; name: string | null; username: string; bio: string | null; shared_interests: string[] }[]>([]);
-  const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      const { getSuggested } = await import("@/lib/social");
-      const results = await getSuggested(userId, 5);
-      if (!cancelled) setSuggestions(results.map((p) => ({ id: p.id, name: p.name, username: p.username, bio: p.bio, shared_interests: p.shared_interests })));
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  const handleFollow = async (targetId: string) => {
-    if (!userId) return;
-    const { follow } = await import("@/lib/social");
-    const ok = await follow(userId, targetId);
-    if (ok) setFollowingSet((prev) => new Set(prev).add(targetId));
-  };
-
-  if (suggestions.length === 0) {
-    return <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}>Aucune suggestion pour le moment. Ajoute des centres d&apos;intérêt à ton profil pour découvrir des personnes.</p>;
-  }
-
+// ── Suggested profiles ────────────────────────────────────────────────────
+function SuggestedProfiles({ t }: { t: typeof LIGHT }) {
+  const suggestions = [
+    { name: "Marie L.", username: "marie_lit", bio: "Passionnée de littérature française" },
+    { name: "Thomas R.", username: "thomas_philo", bio: "Doctorant en philosophie" },
+    { name: "Léa M.", username: "lea_musique", bio: "Mélomane & critique musicale" },
+  ];
   return (
     <div className="flex flex-col" style={{ gap: 8 }}>
       {suggestions.map((s) => {
-        const displayName = s.name ?? s.username;
-        const tone = avatarTones[(displayName.charCodeAt(0) + (displayName.charCodeAt(1) || 0)) % avatarTones.length];
-        const alreadyFollowed = followingSet.has(s.id);
+        const tone = avatarTones[(s.name.charCodeAt(0) + s.name.charCodeAt(1)) % avatarTones.length];
         return (
           <div key={s.username} className="flex items-center gap-3" style={{ padding: "6px 0" }}>
-            <Avatar initials={getInitials(s.name, s.username)} size={38} {...tone} />
+            <Avatar initials={s.name.split(" ").map((w) => w[0]).join("")} size={38} {...tone} />
             <div className="min-w-0 flex-1">
-              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{displayName}</p>
-              <p className="truncate" style={{ fontSize: 10, color: t.ink(0.4) }}>
-                {s.shared_interests.length > 0 ? s.shared_interests.join(", ") : (s.bio ?? `@${s.username}`)}
-              </p>
+              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{s.name}</p>
+              <p className="truncate" style={{ fontSize: 10, color: t.ink(0.4) }}>{s.bio}</p>
             </div>
-            {alreadyFollowed ? (
-              <span style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: t.black(0.06), color: t.ink(0.5), fontWeight: 500 }}>Suivi</span>
-            ) : (
-              <button type="button" onClick={() => handleFollow(s.id)} style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, background: ACCENT_GRADIENT, color: LIGHT.cream, fontWeight: 500, border: "none", cursor: "pointer" }}>
-                Suivre
-              </button>
-            )}
+            <Link href="/explore" style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, background: ACCENT_GRADIENT, color: LIGHT.cream, fontWeight: 500, textDecoration: "none" }}>
+              Suivre
+            </Link>
           </div>
         );
       })}
@@ -537,9 +534,6 @@ function WelcomeCard({ onNewPost, t }: { onNewPost: () => void; t: typeof LIGHT 
           style={{ color: LIGHT.cream, fontSize: 13, fontWeight: 500, padding: "10px 24px", borderRadius: 20, gap: 6 }}>
           <span aria-hidden>+</span> Créer mon premier post
         </button>
-        <p className="mt-3" style={{ fontSize: 12, color: t.ink(0.5) }}>
-          ou <Link href="/explore" className="db-hover" style={{ color: t.indigo, fontWeight: 500 }}>découvre qui suivre</Link>
-        </p>
       </div>
     </article>
   );
@@ -754,7 +748,7 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (type === "musique" && !musicEmbed) { setError("Ajoute un lien Spotify, Apple Music, Deezer, SoundCloud ou YouTube reconnu."); return; }
+    if (type === "musique" && !musicEmbed) { setError("Ajoute un lien Spotify, Apple Music, Deezer ou YouTube reconnu."); return; }
     const trimmedUrl = type === "article" ? url.trim() : type === "musique" ? musicUrl.trim() : "";
     if (trimmedUrl && !safeUrl(trimmedUrl)) { setError("Le lien doit commencer par http:// ou https://"); return; }
     setSubmitting(true);
@@ -866,6 +860,43 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
   );
 }
 
+// ── Newsletter article card (shown in the feed) ──────────────────────────
+function NewsletterFeedCard({ articles, t }: { articles: NewsletterArticle[]; t: typeof LIGHT }) {
+  if (articles.length === 0) return null;
+  const card: CSSProperties = { background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 0, border: "none", overflow: "hidden" };
+  return (
+    <div style={card}>
+      <div className="flex items-center gap-2" style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${t.black(0.05)}` }}>
+        <span style={{ fontSize: 16 }}>{"\u{1F4EC}"}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Tes newsletters</span>
+        <Link href="/newsletter" className="ml-auto db-hover" style={{ fontSize: 11, color: t.indigo, fontWeight: 500, padding: "2px 8px", borderRadius: 6 }}>
+          Gérer →
+        </Link>
+      </div>
+      <div className="flex flex-col" style={{ gap: 0 }}>
+        {articles.map((a, i) => (
+          <a key={`${a.source_id}-${i}`} href={a.url} target="_blank" rel="noopener noreferrer"
+            className="db-hover flex gap-3"
+            style={{ padding: "12px 16px", textDecoration: "none", borderBottom: i < articles.length - 1 ? `1px solid ${t.black(0.04)}` : undefined }}>
+            <span style={{ width: 36, height: 36, borderRadius: 10, background: a.source_color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+              {a.source_icon}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text, lineHeight: 1.3 }}>{a.title}</p>
+              {a.description && <p className="line-clamp-2" style={{ fontSize: 11, color: t.ink(0.5), lineHeight: 1.4, marginTop: 2 }}>{a.description}</p>}
+              <div className="mt-1 flex items-center gap-2">
+                <span style={{ fontSize: 10, color: t.ink(0.4) }}>{a.source_name}</span>
+                <span style={{ fontSize: 10, color: t.ink(0.3) }}>·</span>
+                <span style={{ fontSize: 10, color: t.ink(0.4) }}>{a.theme}</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════
@@ -886,6 +917,8 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [utilityOpen, setUtilityOpen] = useState(false);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
+  const [nlArticles, setNlArticles] = useState<NewsletterArticle[]>([]);
+  const [podcastSubCount, setPodcastSubCount] = useState(0);
 
   // Dynamic CSS that uses theme tokens
   const css = `
@@ -895,6 +928,8 @@ export default function Dashboard() {
 .db-pill:hover { background: ${t.black(0.08)}; }
 .db-chip { background: ${t.surface}; color: ${t.ink(0.5)}; }
 .db-chip:hover { background: ${t === DARK ? "#243059" : "#EAE3D6"}; }
+.db-space { background: ${t.surface}; transition: background-color 0.15s; }
+.db-space:hover { background: ${t === DARK ? "#243059" : "#EAE3D6"}; }
 .db-option { background: ${t.white}; }
 .db-option:hover { background: ${t.black(0.03)}; }
 .db-fab { background: ${t === DARK ? "#7B8CDE" : "#2A3560"}; }
@@ -988,8 +1023,6 @@ ${socialCardsCss}
       const error = user ? await ensureProfile(user) : null;
       if (cancelled) return;
       setProfileError(error);
-      // Accounts confirmed by email reach the dashboard first: record their referral here.
-      if (!error) void claimReferral(userId);
       const { data } = await supabase.from("profiles").select("name, username, location").eq("id", userId).maybeSingle();
       if (!cancelled) setProfile(data);
       const remote = await readRemotePreferences(userId);
@@ -1006,9 +1039,36 @@ ${socialCardsCss}
     return () => { cancelled = true; };
   }, [userId]);
 
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const subs = await getUserSubscriptions(userId);
+      if (cancelled || subs.length === 0) return;
+      const sourceIds = subs.map((s) => s.source_id);
+      const withFeed = NEWSLETTER_SOURCES.filter((s) => sourceIds.includes(s.id) && s.feed_url);
+      if (withFeed.length === 0) return;
+      try {
+        const res = await fetch(`/api/newsletters?sources=${withFeed.map((s) => s.id).join(",")}`);
+        if (!res.ok) return;
+        const { articles } = await res.json();
+        if (!cancelled) setNlArticles(articles ?? []);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    getUserPodcastSubscriptions(userId).then((list) => { if (!cancelled) setPodcastSubCount(list.length); });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const closeModal = useCallback(() => setModalOpen(false), []);
 
+  const query = themesQuery(preferences.themes);
+  const news = useNews(query ? { q: query } : { category: "Actualités" }, preferences.modules.actualites && Boolean(userId));
 
   const handleSavePreferences = async (next: Preferences) => {
     setPreferences(next);
@@ -1025,7 +1085,7 @@ ${socialCardsCss}
 
   type FeedItem = { key: string; tags: string[]; node: ReactNode };
   const on = (moduleId: ModuleId) => preferences.modules[moduleId];
-  const typeModule: Partial<Record<PostType, ModuleId>> = { musique: "musique", livre: "livres" };
+  const typeModule: Partial<Record<PostType, ModuleId>> = { article: "actualites", musique: "musique", livre: "livres" };
 
   const postItems: FeedItem[] = (posts ?? [])
     .filter((post) => { const m = typeModule[post.type]; return !m || on(m); })
@@ -1038,6 +1098,18 @@ ${socialCardsCss}
   if (on("musique")) (moduleItems["musique"] ??= []).push({ key: "listening", tags: ["Musique"], node: <NowListeningCard /> });
   if (on("livres")) (moduleItems["livres"] ??= []).push({ key: "reading", tags: ["Livres"], node: <ReadingNowCard /> });
   if (on("reactions")) (moduleItems["reactions"] ??= []).push({ key: "discussions", tags: [], node: <DiscussionsCard /> });
+  if (on("marches")) (moduleItems["marches"] ??= []).push({ key: "markets", tags: ["Actualités"], node: <MarketsFlashCard /> });
+  if (on("actualites")) {
+    const items: FeedItem[] = [];
+    if (news.error) items.push({ key: "news-error", tags: ["Actualités"], node: <NewsError onRetry={news.retry} /> });
+    else if (news.loading || !news.articles) items.push({ key: "news-loading", tags: ["Actualités"], node: <NewsSkeleton /> });
+    else { for (const article of news.articles.slice(0, NEWS_IN_FEED)) items.push({ key: article.url, tags: ["Actualités"], node: <NewsCard article={article} user={session.user} onShared={loadPosts} /> }); }
+    moduleItems["actualites"] = items;
+  }
+
+  if (nlArticles.length > 0) {
+    (moduleItems["actualites"] ??= []).push({ key: "newsletter-feed", tags: ["Actualités"], node: <NewsletterFeedCard articles={nlArticles.slice(0, 5)} t={t} /> });
+  }
 
   const sortedModuleItems: FeedItem[] = preferences.moduleOrder.flatMap((id) => moduleItems[id] ?? []);
   const discoveryItems: FeedItem[] = [];
@@ -1046,6 +1118,7 @@ ${socialCardsCss}
     Array.from({ length: Math.max(first.length, second.length) }, (_, i) => [first[i], second[i]]).flat().filter((item): item is FeedItem => Boolean(item));
 
   const feedItems = preferences.order === "social" ? [...postItems, ...sortedModuleItems, ...discoveryItems]
+    : preferences.order === "actualites" ? [...sortedModuleItems, ...postItems, ...discoveryItems]
     : [...interleave(postItems, sortedModuleItems), ...discoveryItems];
   const isVisible = (tags: string[]) => filter === "Tout" || tags.includes(filter);
   const hasVisibleItem = feedItems.some((item) => isVisible(item.tags));
@@ -1108,6 +1181,22 @@ ${socialCardsCss}
           ) : (
             <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}><Link href="/explore" style={{ color: t.indigo }}>Découvre des profils</Link> à suivre.</p>
           )}
+          <Divider t={t} />
+          <SectionLabel t={t}>Qui est en ligne</SectionLabel>
+          <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}>{following.length > 0 ? "Aucun abonné en ligne pour le moment." : "Suis des profils pour voir leur activité ici."}</p>
+          <Divider t={t} />
+          <SectionLabel t={t}>Mes espaces</SectionLabel>
+          <div className="grid grid-cols-2" style={{ gap: 6 }}>
+            {spaces.map((space) => {
+              const content = <><span aria-hidden style={{ fontSize: 16 }}>{space.icon}</span><span className="mt-1 block" style={{ fontSize: 11, fontWeight: 500, color: t.text }}>{space.title}</span><span className="block" style={{ fontSize: 10, color: t.ink(0.4) }}>{space.detail}</span></>;
+              const style: CSSProperties = { borderRadius: 10, padding: 10 };
+              return space.href ? (
+                <Link key={space.title} href={space.href} className="db-space block" style={style}>{content}</Link>
+              ) : (
+                <button key={space.title} type="button" onClick={() => space.filter && setFilter(space.filter)} className="db-space text-left" style={style}>{content}</button>
+              );
+            })}
+          </div>
         </aside>
 
         {/* Feed */}
@@ -1125,7 +1214,7 @@ ${socialCardsCss}
                 ))}
                 <button type="button" onClick={() => setCustomizerOpen(true)} className="db-hover ml-auto flex shrink-0 items-center"
                   style={{ gap: 5, border: `1px solid ${t.black(0.1)}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, color: t.ink(0.5) }}>
-                  <span aria-hidden>✧</span> Personnaliser
+                  <span aria-hidden>⚙️</span> Personnaliser
                 </button>
               </div>
             </div>
@@ -1174,7 +1263,7 @@ ${socialCardsCss}
 
           <button type="button" onClick={() => setUtilityOpen(true)} aria-label="Ouvrir le panneau utilitaire"
             className="db-hover absolute bottom-6 right-[72px] z-20 flex items-center justify-center md:hidden"
-            style={{ background: t.white, width: 40, height: 40, borderRadius: "50%", fontSize: 16, border: `1px solid ${t.black(0.1)}`, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>≡</button>
+            style={{ background: t.white, width: 40, height: 40, borderRadius: "50%", fontSize: 16, border: `1px solid ${t.black(0.1)}`, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>⚡</button>
           <button type="button" onClick={() => setModalOpen(true)} aria-label="Nouveau post" title="Nouveau post"
             className="db-fab absolute bottom-6 right-6 z-20 flex items-center justify-center"
             style={{ color: LIGHT.cream, width: 48, height: 48, borderRadius: "50%", fontSize: 22, boxShadow: "0 4px 20px rgba(42,53,96,0.3)" }}>+</button>
@@ -1184,9 +1273,9 @@ ${socialCardsCss}
         <aside className="hidden overflow-y-auto md:block" style={{ background: t.white, borderLeft: `1px solid ${t.black(0.04)}`, padding: "20px 16px" }}>
           <div className="flex items-center" style={{ gap: 6, marginBottom: 16 }}>
             {[
-              { icon: "∎", value: String(posts?.length ?? 0), label: "posts" },
-              { icon: "♪", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
-              { icon: "📕", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
+              { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
+              { icon: "\u{1F3B5}", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
+              { icon: "\u{1F4D6}", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
             ].map((stat) => (
               <div key={stat.label} className="flex-1 text-center" style={{ background: t.cream, borderRadius: 12, padding: "8px 4px" }}>
                 <p style={{ fontSize: 15, fontWeight: 700, color: t.text, lineHeight: 1 }}>{stat.value}</p>
@@ -1198,7 +1287,24 @@ ${socialCardsCss}
           <TrendingTopics posts={posts} t={t} />
           <Divider t={t} />
           <SectionLabel t={t}>Profils suggérés</SectionLabel>
-          <SuggestedProfiles t={t} userId={userId} />
+          <SuggestedProfiles t={t} />
+          <Divider t={t} />
+          <SectionLabel t={t}>Raccourcis</SectionLabel>
+          <div className="grid grid-cols-3" style={{ gap: 6 }}>
+            {[
+              { icon: "\u{1F4EC}", label: "Newsletters", href: "/newsletter" },
+              { icon: "\u{1F399}", label: "Podcasts", href: "/podcasts" },
+              { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
+              { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
+              { icon: "\u{1F4F0}", label: "Actus", href: "/actualites" },
+              { icon: "⚙️", label: "Réglages", href: "/settings" },
+            ].map((link) => (
+              <Link key={link.label} href={link.href} className="db-hover flex flex-col items-center"
+                style={{ background: t.cream, padding: "10px 4px", borderRadius: 12, fontSize: 10, gap: 3, color: t.ink(0.6), textDecoration: "none" }}>
+                <span aria-hidden style={{ fontSize: 16 }}>{link.icon}</span>{link.label}
+              </Link>
+            ))}
+          </div>
           <Divider t={t} />
           <SectionLabel t={t}>Mes thèmes</SectionLabel>
           <div className="flex flex-wrap" style={{ gap: 5 }}>
@@ -1210,6 +1316,29 @@ ${socialCardsCss}
           </div>
           <button type="button" onClick={() => setCustomizerOpen(true)} className="db-hover mt-2 w-full"
             style={{ border: `1px solid ${t.black(0.08)}`, borderRadius: 8, fontSize: 11, padding: 6, color: t.ink(0.6) }}>Personnaliser</button>
+          <Divider t={t} />
+          <div className="flex flex-col" style={{ gap: 8 }}>
+            <Link href="/newsletter" style={{ textDecoration: "none" }}>
+              <div className="db-hover flex items-center gap-3" style={{ background: t.cream, borderRadius: 12, padding: 12, cursor: "pointer" }}>
+                <span style={{ fontSize: 20 }}>{"\u{1F4EC}"}</span>
+                <div className="min-w-0 flex-1">
+                  <p style={{ fontSize: 12, fontWeight: 500, color: t.text }}>Newsletters</p>
+                  <p style={{ fontSize: 10, color: t.ink(0.4) }}>Culturelles françaises</p>
+                </div>
+                <span style={{ fontSize: 11, color: t.indigo }}>→</span>
+              </div>
+            </Link>
+            <Link href="/podcasts" style={{ textDecoration: "none" }}>
+              <div className="db-hover flex items-center gap-3" style={{ background: t.cream, borderRadius: 12, padding: 12, cursor: "pointer" }}>
+                <span style={{ fontSize: 20 }}>{"\u{1F399}"}</span>
+                <div className="min-w-0 flex-1">
+                  <p style={{ fontSize: 12, fontWeight: 500, color: t.text }}>Podcasts{podcastSubCount > 0 ? ` · ${podcastSubCount}` : ""}</p>
+                  <p style={{ fontSize: 10, color: t.ink(0.4) }}>Découvrir & écouter</p>
+                </div>
+                <span style={{ fontSize: 11, color: t.indigo }}>→</span>
+              </div>
+            </Link>
+          </div>
         </aside>
       </div>
 
@@ -1223,7 +1352,7 @@ ${socialCardsCss}
             className="fixed inset-x-0 bottom-0 z-50 md:hidden"
             style={{ background: t.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "75vh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.12)" }}>
             <div className="flex items-center justify-between" style={{ padding: "16px 20px 8px", borderBottom: `1px solid ${t.black(0.06)}` }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: t.text }}>≡ Utilitaires</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: t.text }}>⚡ Utilitaires</span>
               <button type="button" onClick={() => setUtilityOpen(false)} aria-label="Fermer" className="db-play" style={{ fontSize: 16 }}>✕</button>
             </div>
             <div style={{ padding: "12px 20px 24px" }}>
@@ -1232,7 +1361,7 @@ ${socialCardsCss}
                   { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
                   { icon: "\u{1F3B5}", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
                   { icon: "\u{1F4D6}", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
-                  { icon: "¶", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
+                  { icon: "\u{1F4AC}", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
                 ].map((stat) => (
                   <div key={stat.label} className="text-center" style={{ background: t.cream, borderRadius: 10, padding: "10px 4px" }}>
                     <p style={{ fontSize: 14 }} aria-hidden>{stat.icon}</p>
@@ -1243,8 +1372,8 @@ ${socialCardsCss}
               </div>
               <div className="grid grid-cols-2" style={{ gap: 8 }}>
                 {[
-                  { icon: "+", label: "Nouveau post", action: () => { setUtilityOpen(false); setModalOpen(true); } },
-                  { icon: "✧", label: "Personnaliser", action: () => { setUtilityOpen(false); setCustomizerOpen(true); } },
+                  { icon: "➕", label: "Nouveau post", action: () => { setUtilityOpen(false); setModalOpen(true); } },
+                  { icon: "⚙️", label: "Personnaliser", action: () => { setUtilityOpen(false); setCustomizerOpen(true); } },
                 ].map((s) => (
                   <button key={s.label} type="button" onClick={s.action} className="db-hover flex items-center justify-center"
                     style={{ background: t.cream, padding: "12px 10px", borderRadius: 12, fontSize: 12, gap: 6, color: t.ink(0.6) }}>
@@ -1254,9 +1383,9 @@ ${socialCardsCss}
               </div>
               <div className="mt-2 grid grid-cols-3" style={{ gap: 8 }}>
                 {[
-                  { icon: "✦", label: "Explorer", href: "/explore" },
-                  { icon: "◑", label: "Profil", href: "/profile" },
-                  { icon: "⊙", label: "Paramètres", href: "/settings" },
+                  { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
+                  { icon: "\u{1F464}", label: "Profil", href: "/profile" },
+                  { icon: "\u{1F527}", label: "Paramètres", href: "/settings" },
                 ].map((link) => (
                   <Link key={link.label} href={link.href} onClick={() => setUtilityOpen(false)} className="db-hover flex flex-col items-center"
                     style={{ background: t.cream, padding: "12px 8px", borderRadius: 12, fontSize: 11, gap: 4, color: t.ink(0.6) }}>
