@@ -196,7 +196,7 @@ function Avatar({ initials, size, background, color }: { initials: string; size:
 function MusicShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const track = parseShortcutTrack(post.metadata);
   const embed = post.type === "musique" ? parseEmbed(post.metadata) : null;
-  const artwork = track?.artwork ?? embed?.artwork ?? null;
+  const artwork = track?.artwork ?? embed?.thumbnail ?? null;
   const title = track?.title ?? embed?.title ?? post.content;
   const artist = track?.artist ?? embed?.artist ?? null;
   const url = track?.trackUrl ?? post.url;
