@@ -28,6 +28,7 @@ const DISPLAY = "'Cabinet Grotesk', system-ui, sans-serif";
 const UI = "Satoshi, system-ui, sans-serif";
 const READING = "Literata, Georgia, serif";
 const MONO = "'JetBrains Mono', monospace";
+const HERO_SERIF = "'DM Serif Display', Literata, Georgia, serif";
 
 const LIGHT = {
   ground: "#ECEEEA", surface: "#FAFAF8", text: "#15171A",
@@ -43,16 +44,23 @@ const DARK = {
   ink: (a: number) => `rgba(230,232,227,${a})`,
 };
 
+/** Dark by default, toggle persisted in localStorage */
 function useTheme() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   useEffect(() => {
-    const check = () => setDark(document.documentElement.getAttribute("data-theme") === "dark");
-    check();
-    const obs = new MutationObserver(check);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => obs.disconnect();
+    try {
+      const saved = localStorage.getItem("bb-theme");
+      if (saved === "light") setDark(false);
+    } catch {}
   }, []);
-  return dark ? DARK : LIGHT;
+  const toggle = useCallback(() => {
+    setDark((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("bb-theme", next ? "dark" : "light"); } catch {}
+      return next;
+    });
+  }, []);
+  return { t: dark ? DARK : LIGHT, dark, toggle };
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -80,7 +88,6 @@ type Profile = { name: string | null; username: string; location: string | null 
 
 type OgData = { title: string | null; description: string | null; image: string | null; domain: string | null; siteName: string | null };
 
-// The FK is named because profiles.referred_by_post also links the two tables (2026-10-14 migration).
 const POST_SELECT = "*, profiles!posts_user_id_fkey (id, name, username, avatar_url)";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -141,7 +148,6 @@ function useOgPreview(url: string | null) {
   return og;
 }
 
-
 // ── Group posts into shelves by user ──────────────────────────────────────
 type ShelfGroup = {
   userId: string;
@@ -190,9 +196,8 @@ function Avatar({ initials, size, background, color }: { initials: string; size:
   );
 }
 
-// ── Shelf item components ─────────────────────────────────────────────────
+// ── Shelf item components — BIGGER for cinematic look ────────────────────
 
-/** Album/track cover in the shelf */
 function MusicShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const track = parseShortcutTrack(post.metadata);
   const embed = post.type === "musique" ? parseEmbed(post.metadata) : null;
@@ -203,35 +208,25 @@ function MusicShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const [imgFailed, setImgFailed] = useState(false);
 
   const cover = (
-    <div className="shelf-item group" style={{ width: 148, flexShrink: 0 }}>
-      <div
-        className="relative overflow-hidden"
-        style={{ width: 148, height: 148, borderRadius: 8, background: t.surface }}
-      >
+    <div className="shelf-item group" style={{ width: 170, flexShrink: 0 }}>
+      <div className="relative overflow-hidden" style={{ width: 170, height: 170, borderRadius: 10, background: t.surface }}>
         {artwork && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={artwork} alt={title} loading="lazy"
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onError={() => setImgFailed(true)}
-          />
+          <img src={artwork} alt={title} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setImgFailed(true)} />
         ) : (
-          <div className="flex h-full items-center justify-center" style={{ fontSize: 36, color: t.ink(0.12) }}>♫</div>
+          <div className="flex h-full items-center justify-center" style={{ fontSize: 40, color: t.ink(0.12) }}>&#9835;</div>
         )}
       </div>
-      <p className="mt-1.5 truncate" style={{ fontSize: 13, fontWeight: 500, color: t.text, fontFamily: UI }}>{title}</p>
+      <p className="mt-2 truncate" style={{ fontSize: 13, fontWeight: 500, color: t.text, fontFamily: UI }}>{title}</p>
       {artist && <p className="truncate" style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>{artist}</p>}
     </div>
   );
 
   return url ? (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>
-      {cover}
-    </a>
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>{cover}</a>
   ) : cover;
 }
 
-/** Book cover in the shelf */
 function BookShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const link = safeUrl(post.url);
   const [imgFailed, setImgFailed] = useState(false);
@@ -242,37 +237,27 @@ function BookShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const author = parts[1] ?? null;
 
   const content = (
-    <div className="shelf-item" style={{ width: 112, flexShrink: 0 }}>
-      <div
-        className="relative overflow-hidden"
-        style={{ width: 112, height: 162, borderRadius: 4, background: t.surface }}
-      >
+    <div className="shelf-item" style={{ width: 130, flexShrink: 0 }}>
+      <div className="relative overflow-hidden" style={{ width: 130, height: 190, borderRadius: 6, background: t.surface }}>
         {coverImg && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={coverImg} alt={bookTitle} loading="lazy"
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onError={() => setImgFailed(true)}
-          />
+          <img src={coverImg} alt={bookTitle} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setImgFailed(true)} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center p-3 text-center" style={{ background: t.surface }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.3 }}>{bookTitle}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.3 }}>{bookTitle}</span>
           </div>
         )}
       </div>
-      <p className="mt-1.5 truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text, fontFamily: UI }}>{bookTitle}</p>
+      <p className="mt-2 truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text, fontFamily: UI }}>{bookTitle}</p>
       {author && <p className="truncate" style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>{author}</p>}
     </div>
   );
 
   return link ? (
-    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>
-      {content}
-    </a>
+    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>{content}</a>
   ) : content;
 }
 
-/** Article card in the shelf */
 function ArticleShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const link = safeUrl(post.url);
   const og = useOgPreview(post.url);
@@ -283,76 +268,39 @@ function ArticleShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const [imgFailed, setImgFailed] = useState(false);
 
   const card = (
-    <div className="shelf-item" style={{ width: 200, flexShrink: 0 }}>
-      <div
-        className="flex flex-col overflow-hidden"
-        style={{
-          width: 200, height: 162, borderRadius: 8,
-          background: t.surface,
-          border: `1px solid ${t.line}`,
-        }}
-      >
+    <div className="shelf-item" style={{ width: 220, flexShrink: 0 }}>
+      <div className="flex flex-col overflow-hidden" style={{ width: 220, height: 170, borderRadius: 10, background: t.surface, border: `1px solid ${t.line}` }}>
         {ogImage && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={ogImage} alt="" loading="lazy"
-            style={{ width: "100%", height: 80, objectFit: "cover", display: "block" }}
-            onError={() => setImgFailed(true)} />
+          <img src={ogImage} alt="" loading="lazy" style={{ width: "100%", height: 90, objectFit: "cover", display: "block" }} onError={() => setImgFailed(true)} />
         ) : null}
-        <div style={{ padding: "10px 14px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div style={{ padding: "12px 16px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             {siteName && (
-              <p style={{ fontSize: 10, color: t.muted, fontFamily: MONO, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                {siteName}
-              </p>
+              <p style={{ fontSize: 10, color: t.muted, fontFamily: MONO, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{siteName}</p>
             )}
-            <p style={{
-              fontSize: 13, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.35,
-              display: "-webkit-box", WebkitLineClamp: ogImage ? 2 : 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden",
-            }}>
-              {displayTitle}
-            </p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: ogImage ? 2 : 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>{displayTitle}</p>
           </div>
-          {post.category && (
-            <p style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>{post.category}</p>
-          )}
+          {post.category && <p style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>{post.category}</p>}
         </div>
       </div>
     </div>
   );
 
   return link ? (
-    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>
-      {card}
-    </a>
+    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>{card}</a>
   ) : card;
 }
 
-/** Quote / reflexion card in the shelf */
 function QuoteShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   return (
-    <div className="shelf-item" style={{ width: 200, flexShrink: 0 }}>
-      <div
-        className="flex items-start"
-        style={{
-          width: 200, minHeight: 162, borderRadius: 8,
-          background: t.surface,
-          padding: 16,
-          border: `1px solid ${t.line}`,
-        }}
-      >
-        <p style={{
-          fontSize: 15, color: t.text, fontFamily: READING,
-          fontWeight: 400, lineHeight: 1.55, fontStyle: "italic",
-          display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical" as const, overflow: "hidden",
-        }}>
-          « {post.content.slice(0, 200)} »
+    <div className="shelf-item" style={{ width: 220, flexShrink: 0 }}>
+      <div className="flex items-start" style={{ width: 220, minHeight: 170, borderRadius: 10, background: t.surface, padding: 18, border: `1px solid ${t.line}` }}>
+        <p style={{ fontSize: 15, color: t.text, fontFamily: READING, fontWeight: 400, lineHeight: 1.55, fontStyle: "italic", display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
+          &laquo; {post.content.slice(0, 200)} &raquo;
         </p>
       </div>
-      {post.category && (
-        <p className="mt-1.5" style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>
-          {post.category}
-        </p>
-      )}
+      {post.category && <p className="mt-1.5" style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>{post.category}</p>}
     </div>
   );
 }
@@ -367,35 +315,25 @@ function PersonShelf({ shelf, t }: { shelf: ShelfGroup; t: typeof LIGHT }) {
   const tone = avatarTones[(shelf.userId.charCodeAt(0) + shelf.userId.charCodeAt(1)) % avatarTones.length];
 
   return (
-    <section style={{ marginBottom: 36 }}>
-      {/* Person header */}
-      <div className="flex items-center justify-between" style={{ marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${t.line}` }}>
-        <Link href={`/profile?id=${shelf.userId}`} className="flex items-center" style={{ gap: 10, textDecoration: "none" }}>
-          <Avatar initials={getInitials(shelf.name, shelf.username)} size={32} {...tone} />
+    <section style={{ marginBottom: 48 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${t.line}` }}>
+        <Link href={`/profile?id=${shelf.userId}`} className="flex items-center" style={{ gap: 12, textDecoration: "none" }}>
+          <Avatar initials={getInitials(shelf.name, shelf.username)} size={36} {...tone} />
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em", lineHeight: 1 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em", lineHeight: 1 }}>
               {shelf.name.split(" ")[0]}
             </h2>
             <span style={{ fontSize: 12, color: t.muted, fontFamily: UI }}>
               {subtitle}
-              {shelf.isListening && <span style={{ marginLeft: 6, color: "#16A34A" }}>●</span>}
+              {shelf.isListening && <span style={{ marginLeft: 6, color: "#16A34A" }}>&#9679;</span>}
             </span>
           </div>
         </Link>
-        <Link
-          href={`/profile?id=${shelf.userId}`}
-          style={{ fontSize: 12, color: t.primary, fontFamily: UI, textDecoration: "none" }}
-        >
-          Voir l&apos;étagère →
+        <Link href={`/profile?id=${shelf.userId}`} style={{ fontSize: 12, color: t.primary, fontFamily: UI, textDecoration: "none" }}>
+          Voir l&apos;étagère &rarr;
         </Link>
       </div>
-
-      {/* Horizontal scroll */}
-      <div
-        ref={scrollRef}
-        className="shelf-scroll flex overflow-x-auto"
-        style={{ gap: 14, paddingBottom: 4 }}
-      >
+      <div ref={scrollRef} className="shelf-scroll flex overflow-x-auto" style={{ gap: 16, paddingBottom: 4 }}>
         {shelf.posts.map((post) => {
           if (post.type === "musique") return <MusicShelfItem key={post.id} post={post} t={t} />;
           if (post.type === "livre") return <BookShelfItem key={post.id} post={post} t={t} />;
@@ -404,104 +342,6 @@ function PersonShelf({ shelf, t }: { shelf: ShelfGroup; t: typeof LIGHT }) {
         })}
       </div>
     </section>
-  );
-}
-
-// ── "Personne à suivre ?" card ────────────────────────────────────────────
-function FollowCard({ t, userId }: { t: typeof LIGHT; userId: string | undefined }) {
-  const [suggestions, setSuggestions] = useState<PublicProfile[]>([]);
-  const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    getSuggested(userId, 4).then((results) => {
-      if (!cancelled) setSuggestions(results);
-    });
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  const handleFollow = async (targetId: string) => {
-    if (!userId) return;
-    const ok = await followUser(userId, targetId);
-    if (ok) setFollowedSet((prev) => new Set(prev).add(targetId));
-  };
-
-  return (
-    <div style={{
-      background: t.surface,
-      borderRadius: 12,
-      padding: 24,
-      border: `1px solid ${t.line}`,
-    }}>
-      <h3 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em" }}>
-        Personne à suivre ?
-      </h3>
-      <p className="mt-2" style={{ fontSize: 13, color: t.muted, fontFamily: UI, lineHeight: 1.5 }}>
-        Découvre des profils et remplis ton étagère.
-      </p>
-
-      {suggestions.length > 0 && (
-        <div className="mt-5 flex flex-col" style={{ gap: 10 }}>
-          {suggestions.map((s) => {
-            const displayName = s.name ?? s.username;
-            const tone = avatarTones[(s.id.charCodeAt(0) + (s.id.charCodeAt(1) || 0)) % avatarTones.length];
-            const followed = followedSet.has(s.id);
-            return (
-              <div key={s.id} className="flex items-center" style={{ gap: 10 }}>
-                <Avatar initials={getInitials(s.name, s.username)} size={32} {...tone} />
-                <span style={{ fontSize: 13, color: t.text, fontFamily: UI, flex: 1 }}>{displayName}</span>
-                {followed ? (
-                  <span style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>Suivi ✓</span>
-                ) : (
-                  <button type="button" onClick={() => handleFollow(s.id)}
-                    style={{ fontSize: 11, color: t.primary, background: "none", border: `1px solid ${t.line}`, borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontFamily: UI }}>
-                    Suivre
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="mt-5">
-        <Link href="/explore"
-          style={{
-            fontSize: 13, fontWeight: 500, fontFamily: UI,
-            color: t.primary, textDecoration: "none",
-          }}>
-          Explorer les profils →
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-// ── Empty state ───────────────────────────────────────────────────────────
-function EmptyState({ onNewPost, t, userId }: { onNewPost: () => void; t: typeof LIGHT; userId: string | undefined }) {
-  return (
-    <div className="grid gap-10 md:grid-cols-[2fr_1fr]" style={{ marginTop: 32 }}>
-      <div>
-        <h1 style={{ fontSize: 30, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-          Ton étagère est vide pour l&apos;instant.
-        </h1>
-        <p className="mt-3" style={{ fontSize: 15, color: t.muted, fontFamily: UI, lineHeight: 1.6, maxWidth: 460 }}>
-          Partage un morceau, un article, le livre sur ta table de nuit. Tes amis voient ton étagère, tu vois la leur.
-        </p>
-        <div className="mt-6 flex flex-wrap" style={{ gap: 10 }}>
-          <button type="button" onClick={onNewPost}
-            style={{ background: t.primary, color: t.onPrimary, fontSize: 14, fontWeight: 500, fontFamily: UI, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer" }}>
-            Créer mon étagère
-          </button>
-          <Link href="/explore"
-            style={{ fontSize: 14, fontFamily: UI, color: t.text, padding: "12px 24px", borderRadius: 8, border: `1px solid ${t.line}`, textDecoration: "none" }}>
-            Explorer
-          </Link>
-        </div>
-      </div>
-      <FollowCard t={t} userId={userId} />
-    </div>
   );
 }
 
@@ -555,25 +395,17 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
   const field: CSSProperties = { background: t.ground, border: `1px solid ${t.line}`, borderRadius: 8, color: t.text, outline: "none", width: "100%", fontFamily: UI };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)" }} onClick={onClose}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}
-        className="w-full" style={{ maxWidth: 500, background: t.surface, borderRadius: 14, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)" }} onClick={onClose}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} className="w-full" style={{ maxWidth: 500, background: t.surface, borderRadius: 14, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div className="flex items-center justify-between">
           <h2 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY }}>Nouveau post</h2>
-          <button type="button" onClick={onClose} style={{ fontSize: 18, color: t.muted, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <button type="button" onClick={onClose} style={{ fontSize: 18, color: t.muted, background: "none", border: "none", cursor: "pointer" }}>&times;</button>
         </div>
 
         <div className="mt-4 flex" style={{ gap: 6 }}>
           {postTypes.map((item) => (
             <button key={item.value} type="button" onClick={() => setType(item.value)}
-              style={{
-                fontSize: 12, padding: "6px 14px", borderRadius: 6, cursor: "pointer",
-                fontFamily: UI, border: "none",
-                ...(type === item.value
-                  ? { background: t.primary, color: t.onPrimary }
-                  : { background: t.ground, color: t.muted }),
-              }}>
+              style={{ fontSize: 12, padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontFamily: UI, border: "none", ...(type === item.value ? { background: t.primary, color: t.onPrimary } : { background: t.ground, color: t.muted }) }}>
               {item.label}
             </button>
           ))}
@@ -581,14 +413,12 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
 
         {type === "article" && (
           <>
-            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)}
-              placeholder="URL de l'article" className="mt-3 block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
+            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="URL de l'article" className="mt-3 block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
             {ogPreview?.title && (
               <div className="mt-2 flex items-center gap-3" style={{ background: t.ground, borderRadius: 8, padding: 10 }}>
                 {ogPreview.image && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={ogPreview.image} alt="" style={{ width: 60, height: 44, borderRadius: 4, objectFit: "cover" }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <img src={ogPreview.image} alt="" style={{ width: 60, height: 44, borderRadius: 4, objectFit: "cover" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{ogPreview.title}</p>
@@ -602,34 +432,24 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
         {type === "musique" && (
           <div className="mt-3">
             <input type="url" value={url} onChange={(e) => { setUrl(e.target.value); if (e.target.value.trim() !== lookedUp) { setMusicEmbed(null); setMusicError(false); } }}
-              onBlur={(e) => lookUpMusic(e.currentTarget.value)}
-              placeholder="Lien Spotify, Apple Music, Deezer, YouTube..."
-              className="block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
-            {musicLoading && <p className="mt-2" style={{ fontSize: 11, color: t.muted }}>Recherche…</p>}
+              onBlur={(e) => lookUpMusic(e.currentTarget.value)} placeholder="Lien Spotify, Apple Music, Deezer, YouTube..." className="block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
+            {musicLoading && <p className="mt-2" style={{ fontSize: 11, color: t.muted }}>Recherche&hellip;</p>}
             {musicEmbed && !musicLoading && (
               <div className="mt-2">
-                <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>✓ Trouvé</p>
+                <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>&check; Trouvé</p>
                 <SharedMusicCard embed={musicEmbed} href={url.trim()} />
               </div>
             )}
-            {musicError && !musicLoading && (
-              <p className="mt-2" style={{ fontSize: 11, color: "#DC2626" }}>Lien non reconnu</p>
-            )}
+            {musicError && !musicLoading && <p className="mt-2" style={{ fontSize: 11, color: "#DC2626" }}>Lien non reconnu</p>}
           </div>
         )}
 
-        <textarea value={content} onChange={(e) => setContent(e.target.value)}
-          placeholder={type === "reflexion" ? "Ta réflexion..." : "Un commentaire..."}
-          rows={3} className="mt-3 block resize-none" style={{ ...field, padding: "12px 14px", fontSize: 14, lineHeight: 1.5, fontFamily: type === "reflexion" ? READING : UI }} />
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={type === "reflexion" ? "Ta réflexion..." : "Un commentaire..."} rows={3} className="mt-3 block resize-none" style={{ ...field, padding: "12px 14px", fontSize: 14, lineHeight: 1.5, fontFamily: type === "reflexion" ? READING : UI }} />
 
         <div className="mt-3 flex flex-wrap" style={{ gap: 5 }}>
           {categoryList.map((cat) => (
             <button key={cat} type="button" onClick={() => setCategory(category === cat ? null : cat)}
-              style={{
-                fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer",
-                fontFamily: UI, border: `1px solid ${t.line}`,
-                ...(category === cat ? { background: t.primary, color: t.onPrimary, borderColor: t.primary } : { background: "transparent", color: t.muted }),
-              }}>
+              style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer", fontFamily: UI, border: `1px solid ${t.line}`, ...(category === cat ? { background: t.primary, color: t.onPrimary, borderColor: t.primary } : { background: "transparent", color: t.muted }) }}>
               {cat}
             </button>
           ))}
@@ -639,12 +459,7 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
 
         <div className="mt-4 flex justify-end">
           <button type="submit" disabled={(type === "musique" ? !musicEmbed : !content.trim()) || submitting}
-            style={{
-              background: t.primary, color: t.onPrimary,
-              fontSize: 13, fontWeight: 500, fontFamily: UI,
-              padding: "10px 24px", borderRadius: 8, border: "none", cursor: "pointer",
-              opacity: submitting ? 0.6 : 1,
-            }}>
+            style={{ background: t.primary, color: t.onPrimary, fontSize: 13, fontWeight: 500, fontFamily: UI, padding: "10px 24px", borderRadius: 8, border: "none", cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>
             {submitting ? "Publication…" : "Publier"}
           </button>
         </div>
@@ -656,17 +471,17 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
 // ── Loading skeleton ──────────────────────────────────────────────────────
 function ShelfSkeleton({ t }: { t: typeof LIGHT }) {
   return (
-    <div className="animate-pulse" style={{ marginBottom: 36 }}>
-      <div className="flex items-center" style={{ gap: 10, marginBottom: 12 }}>
-        <div style={{ width: 32, height: 32, background: t.surface, borderRadius: "50%" }} />
+    <div className="animate-pulse" style={{ marginBottom: 48 }}>
+      <div className="flex items-center" style={{ gap: 12, marginBottom: 16 }}>
+        <div style={{ width: 36, height: 36, background: t.surface, borderRadius: "50%" }} />
         <div>
           <div style={{ width: 100, height: 16, background: t.surface, borderRadius: 4 }} />
           <div className="mt-1" style={{ width: 140, height: 12, background: t.surface, borderRadius: 4 }} />
         </div>
       </div>
-      <div className="flex" style={{ gap: 14 }}>
-        {[0, 1, 2, 3, 4].map((j) => (
-          <div key={j} style={{ width: 148, height: 148, background: t.surface, borderRadius: 8, flexShrink: 0 }} />
+      <div className="flex" style={{ gap: 16 }}>
+        {[0, 1, 2, 3, 4, 5].map((j) => (
+          <div key={j} style={{ width: 170, height: 170, background: t.surface, borderRadius: 10, flexShrink: 0 }} />
         ))}
       </div>
     </div>
@@ -679,22 +494,21 @@ function ShelfSkeleton({ t }: { t: typeof LIGHT }) {
 
 export default function Dashboard() {
   const router = useRouter();
-  const t = useTheme();
+  const { t, dark, toggle } = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [mine, setMine] = useState<Record<string, MyInteractions>>({});
-  const [following, setFollowing] = useState<PublicProfile[]>([]);
 
   const css = `
     @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@800&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Literata:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Literata:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400&display=swap');
     .shelf-scroll { scrollbar-width: none; }
     .shelf-scroll::-webkit-scrollbar { display: none; }
-    .shelf-item { transition: transform 0.15s ease; }
-    .shelf-item:hover { transform: translateY(-2px); }
+    .shelf-item { transition: transform 0.18s ease; }
+    .shelf-item:hover { transform: translateY(-4px); }
     ${socialCss}
   `;
 
@@ -712,8 +526,6 @@ export default function Dashboard() {
 
   const loadPosts = useCallback(async () => {
     setFeedError(null);
-
-    // Try the personalised feed API first; fall back to chronological.
     const { data: auth } = await supabase.auth.getSession();
     const token = auth.session?.access_token;
     let loaded: Post[] | null = null;
@@ -721,13 +533,10 @@ export default function Dashboard() {
     if (token) {
       try {
         const res = await fetch("/api/feed", { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          loaded = (await res.json()) as Post[];
-        }
-      } catch { /* network error → fall back */ }
+        if (res.ok) { loaded = (await res.json()) as Post[]; }
+      } catch { /* network error - fall back */ }
     }
 
-    // Fallback: plain chronological query
     if (!loaded) {
       const { data, error } = await supabase
         .from("posts").select(POST_SELECT)
@@ -760,7 +569,6 @@ export default function Dashboard() {
     (async () => {
       const error = user ? await ensureProfile(user) : null;
       if (cancelled) return;
-      // Accounts confirmed by email reach the dashboard first: record their referral here.
       if (!error) void claimReferral(userId);
       const { data } = await supabase.from("profiles").select("name, username, location").eq("id", userId).maybeSingle();
       if (!cancelled) setProfile(data);
@@ -769,22 +577,11 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, loadPosts]);
 
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    getFollowing(userId).then((list) => { if (!cancelled) setFollowing(list); });
-    return () => { cancelled = true; };
-  }, [userId]);
-
   const closeModal = useCallback(() => setModalOpen(false), []);
-
-  // Group posts into shelves
   const shelves = useMemo(() => posts ? groupIntoShelves(posts) : [], [posts]);
 
   if (!session) return <div className="min-h-screen" style={{ background: t.ground }} />;
 
-  const email = session.user.email;
-  const initials = getInitials(profile?.name ?? null, email);
   const hasPosts = (posts?.length ?? 0) > 0;
 
   return (
@@ -792,140 +589,121 @@ export default function Dashboard() {
       <div className="min-h-screen" style={{ background: t.ground, color: t.text, fontFamily: UI }}>
         <style>{css}</style>
 
-        {/* ── Top nav ──────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-30" style={{ background: t.ground, borderBottom: `1px solid ${t.line}` }}>
-          <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1080, padding: "12px 20px" }}>
-            <div className="flex items-center" style={{ gap: 24 }}>
-              <Link href="/dashboard" style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY, textDecoration: "none", letterSpacing: "-0.02em" }}>
-                boredboard
-              </Link>
-              <nav className="hidden items-center sm:flex" style={{ gap: 20 }}>
-                <Link href="/dashboard" style={{ fontSize: 13, fontWeight: 500, color: t.text, fontFamily: UI, textDecoration: "none" }}>
-                  Board
-                </Link>
-                <Link href="/explore" style={{ fontSize: 13, color: t.muted, fontFamily: UI, textDecoration: "none" }}>
-                  Explorer
-                </Link>
-              </nav>
-            </div>
-            <div className="flex items-center" style={{ gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => setModalOpen(true)}
-                style={{
-                  background: t.primary, color: t.onPrimary,
-                  fontSize: 13, fontWeight: 500, fontFamily: UI,
-                  padding: "8px 18px", borderRadius: 8, border: "none", cursor: "pointer",
-                }}
-              >
-                + Partager
+        {/* Minimal cinematic nav */}
+        <header style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 30,
+          background: dark ? "rgba(18,26,58,0.85)" : "rgba(236,238,234,0.85)",
+          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+        }}>
+          <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1200, padding: "16px 28px" }}>
+            <Link href="/dashboard" style={{ fontSize: 20, fontWeight: 800, color: t.text, fontFamily: DISPLAY, textDecoration: "none", letterSpacing: "-0.03em" }}>
+              boredboard
+            </Link>
+            <div className="flex items-center" style={{ gap: 12 }}>
+              <button type="button" onClick={toggle} style={{
+                fontSize: 13, fontWeight: 500, fontFamily: UI,
+                padding: "8px 18px", borderRadius: 20,
+                border: `1px solid ${t.line}`, background: "transparent", color: t.text, cursor: "pointer",
+              }}>
+                {dark ? "Mode jour" : "Mode nuit"}
               </button>
-              <Link
-                href="/profile"
-                className="flex shrink-0 items-center justify-center"
-                style={{
-                  width: 34, height: 34, borderRadius: "50%",
-                  background: t.primary, color: t.onPrimary,
-                  fontSize: 12, fontWeight: 500, textDecoration: "none", fontFamily: UI,
-                }}
-              >
-                {initials}
+              <Link href="/profile" className="flex shrink-0 items-center justify-center" style={{
+                width: 34, height: 34, borderRadius: "50%",
+                background: t.primary, color: t.onPrimary,
+                fontSize: 12, fontWeight: 500, textDecoration: "none", fontFamily: UI,
+              }}>
+                {getInitials(profile?.name ?? null, session.user.email)}
               </Link>
             </div>
           </div>
         </header>
 
-        {/* ── Main content ─────────────────────────────────────────── */}
-        <main className="mx-auto" style={{ maxWidth: 1080, padding: "32px 20px 96px" }}>
-          {feedError ? (
-            <div className="text-center" style={{ padding: "60px 20px" }}>
-              <p style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: UI }}>Impossible de charger le feed</p>
-              <p className="mt-2" style={{ fontSize: 12, color: "#B4302F", fontFamily: UI }}>{feedError}</p>
-              <button type="button" onClick={loadPosts} className="mt-4"
-                style={{ fontSize: 12, padding: "8px 20px", borderRadius: 6, border: `1px solid ${t.line}`, color: t.muted, background: "none", cursor: "pointer", fontFamily: UI }}>
-                Réessayer
-              </button>
-            </div>
-          ) : posts === null ? (
-            /* Loading skeleton */
-            <div>
-              <ShelfSkeleton t={t} />
-              <ShelfSkeleton t={t} />
-              <ShelfSkeleton t={t} />
-            </div>
-          ) : !hasPosts ? (
-            <EmptyState onNewPost={() => setModalOpen(true)} t={t} userId={userId} />
-          ) : (
-            /* Shelves + right column */
-            <div className="grid gap-0 md:grid-cols-[1fr_260px] md:gap-12">
+        {/* Hero section */}
+        {!hasPosts || posts === null ? (
+          <div style={{ paddingTop: 80 }}>
+            <main className="mx-auto" style={{ maxWidth: 1200, padding: "0 28px" }}>
+              <div style={{ paddingTop: "10vh", paddingBottom: 48 }}>
+                <h1 style={{
+                  fontSize: "clamp(36px, 5.5vw, 72px)", fontWeight: 400, fontStyle: "italic",
+                  fontFamily: HERO_SERIF, color: t.text, lineHeight: 1.1, letterSpacing: "-0.02em", maxWidth: 900,
+                }}>
+                  Regarde ce que lisent et &eacute;coutent les gens curieux autour de toi.
+                </h1>
+                <p style={{
+                  marginTop: 28, fontSize: "clamp(15px, 1.4vw, 18px)", color: t.muted,
+                  fontFamily: UI, lineHeight: 1.65, maxWidth: 600,
+                }}>
+                  Partage un morceau depuis Apple Music ou Spotify, un article, le livre que tu as sur ta table de nuit. Tes amis voient ton &eacute;tag&egrave;re, tu vois la leur.
+                </p>
+                <div className="flex flex-wrap" style={{ gap: 12, marginTop: 36 }}>
+                  <button type="button" onClick={() => setModalOpen(true)} style={{
+                    background: dark ? "#E6E8E3" : t.primary, color: dark ? "#121A3A" : t.onPrimary,
+                    fontSize: 15, fontWeight: 600, fontFamily: UI, padding: "14px 32px", borderRadius: 10, border: "none", cursor: "pointer",
+                  }}>
+                    Cr&eacute;er mon &eacute;tag&egrave;re
+                  </button>
+                  <Link href="/explore" style={{
+                    fontSize: 15, fontWeight: 500, fontFamily: UI, color: t.text, textDecoration: "none",
+                    padding: "14px 32px", borderRadius: 10, border: `1px solid ${t.line}`, display: "inline-flex", alignItems: "center",
+                  }}>
+                    Voir une &eacute;tag&egrave;re d&apos;exemple
+                  </Link>
+                </div>
+              </div>
+
+              {posts === null ? (
+                <div style={{ paddingTop: 20 }}><ShelfSkeleton t={t} /></div>
+              ) : (
+                <div style={{ paddingTop: 20, opacity: 0.5 }}>
+                  <div className="shelf-scroll flex overflow-x-auto" style={{ gap: 16, paddingBottom: 24 }}>
+                    {[
+                      { w: 170, h: 170, r: 10 }, { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
+                      { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 }, { w: 220, h: 170, r: 10 },
+                      { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
+                    ].map((s, i) => (
+                      <div key={i} style={{ width: s.w, height: s.h, borderRadius: s.r, background: t.surface, flexShrink: 0 }} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+        ) : (
+          /* Feed: full-width shelves */
+          <main className="mx-auto" style={{ maxWidth: 1200, padding: "100px 28px 96px" }}>
+            {feedError ? (
+              <div className="text-center" style={{ padding: "60px 20px" }}>
+                <p style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: UI }}>Impossible de charger le feed</p>
+                <p className="mt-2" style={{ fontSize: 12, color: "#B4302F", fontFamily: UI }}>{feedError}</p>
+                <button type="button" onClick={loadPosts} className="mt-4" style={{ fontSize: 12, padding: "8px 20px", borderRadius: 6, border: `1px solid ${t.line}`, color: t.muted, background: "none", cursor: "pointer", fontFamily: UI }}>
+                  R&eacute;essayer
+                </button>
+              </div>
+            ) : (
               <div>
+                <div style={{ marginBottom: 48 }}>
+                  <h1 style={{
+                    fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, fontStyle: "italic",
+                    fontFamily: HERO_SERIF, color: t.text, lineHeight: 1.15, letterSpacing: "-0.02em",
+                  }}>
+                    Les &eacute;tag&egrave;res autour de toi
+                  </h1>
+                </div>
                 {shelves.map((shelf) => (
                   <PersonShelf key={shelf.userId} shelf={shelf} t={t} />
                 ))}
               </div>
-
-              {/* Right column */}
-              <aside className="hidden md:block" style={{ paddingTop: 4 }}>
-                <div className="sticky" style={{ top: 76 }}>
-                  <FollowCard t={t} userId={userId} />
-
-                  {/* Following list */}
-                  {following.length > 0 && (
-                    <div className="mt-6" style={{ padding: "0 4px" }}>
-                      <p style={{ fontSize: 10, color: t.muted, fontFamily: UI, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
-                        Abonnements
-                      </p>
-                      <div className="flex flex-col" style={{ gap: 6 }}>
-                        {following.slice(0, 8).map((u) => {
-                          const tone = avatarTones[(u.id.charCodeAt(0) + u.id.charCodeAt(1)) % avatarTones.length];
-                          return (
-                            <Link key={u.id} href={`/profile?id=${u.id}`} className="flex items-center" style={{ gap: 8, textDecoration: "none" }}>
-                              <Avatar initials={getInitials(u.name, u.username)} size={24} {...tone} />
-                              <span className="min-w-0 truncate" style={{ fontSize: 12, color: t.text, fontFamily: UI }}>{u.name ?? u.username}</span>
-                            </Link>
-                          );
-                        })}
-                        {following.length > 8 && (
-                          <Link href="/explore" style={{ fontSize: 11, color: t.primary, fontFamily: UI, textDecoration: "none" }}>
-                            Voir tous ({following.length}) →
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick links */}
-                  <div className="mt-6 flex flex-wrap" style={{ gap: 8 }}>
-                    {[
-                      { label: "Livres", href: "/livres" },
-                      { label: "Podcasts", href: "/podcasts" },
-                      { label: "Newsletters", href: "/newsletter" },
-                      { label: "Réglages", href: "/settings" },
-                    ].map((link) => (
-                      <Link key={link.label} href={link.href}
-                        style={{
-                          fontSize: 11, color: t.muted, fontFamily: UI,
-                          padding: "4px 10px", borderRadius: 4,
-                          border: `1px solid ${t.line}`, textDecoration: "none",
-                        }}>
-                        {link.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </aside>
-            </div>
-          )}
-        </main>
+            )}
+          </main>
+        )}
 
         {/* Mobile FAB */}
         <button type="button" onClick={() => setModalOpen(true)} aria-label="Nouveau post"
           className="fixed bottom-6 right-6 z-20 flex items-center justify-center md:hidden"
           style={{
-            background: t.primary, color: t.onPrimary,
-            width: 52, height: 52, borderRadius: "50%",
-            fontSize: 24, border: "none", cursor: "pointer",
-            boxShadow: "0 4px 20px rgba(42,53,96,0.3)",
+            background: dark ? "#E6E8E3" : t.primary, color: dark ? "#121A3A" : t.onPrimary,
+            width: 56, height: 56, borderRadius: "50%", fontSize: 26, border: "none", cursor: "pointer",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
           }}>
           +
         </button>
