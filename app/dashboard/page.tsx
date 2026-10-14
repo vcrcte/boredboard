@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -19,7 +18,7 @@ import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
 import { ensureProfile } from "@/lib/profile";
 import { claimReferral } from "@/lib/referral";
 import { avatarTones } from "@/lib/sample-data";
-import { getFollowing, getSuggested, follow as followUser, type PublicProfile } from "@/lib/social";
+import { getSuggested, follow as followUser, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
 // ── Design tokens ─────────────────────────────────────────────────────────
@@ -510,6 +509,8 @@ function FeedSkeleton({ t }: { t: typeof LIGHT }) {
 }
 
 // ── Follow suggestion sidebar ────────────────────────────────────────────
+// Not rendered yet (written for the feed redesign, 27ef88b).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SuggestionsPanel({ t, userId }: { t: typeof LIGHT; userId: string | undefined }) {
   const [suggestions, setSuggestions] = useState<PublicProfile[]>([]);
   const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
