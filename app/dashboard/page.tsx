@@ -8,18 +8,18 @@ import {
   useState,
   type CSSProperties,
   type FormEvent,
-
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { getInitials } from "@/components/Navbar";
 import SharedMusicCard from "@/components/MusicCard";
-import { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
+import SocialActions, { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
 import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
 import { ensureProfile } from "@/lib/profile";
 import { claimReferral } from "@/lib/referral";
 import { avatarTones } from "@/lib/sample-data";
+import { getFollowing, getSuggested, follow as followUser, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
 // ── Design tokens ─────────────────────────────────────────────────────────
@@ -43,7 +43,6 @@ const DARK = {
   ink: (a: number) => `rgba(230,232,227,${a})`,
 };
 
-/** Dark by default, toggle persisted in localStorage */
 function useTheme() {
   const [dark, setDark] = useState(true);
   useEffect(() => {
@@ -84,7 +83,6 @@ type Post = {
 };
 
 type Profile = { name: string | null; username: string; location: string | null };
-
 type OgData = { title: string | null; description: string | null; image: string | null; domain: string | null; siteName: string | null };
 
 const POST_SELECT = "*, profiles!posts_user_id_fkey (id, name, username, avatar_url)";
@@ -118,6 +116,18 @@ function parseShortcutTrack(value: unknown): ShortcutTrack | null {
   return { title, artist: textOrNull(raw.artist), album: textOrNull(raw.album), platform, artwork: httpsOrNull(raw.artwork), trackUrl: httpsOrNull(raw.trackUrl) };
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "maintenant";
+  if (mins < 60) return `${mins}min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}j`;
+  return `${Math.floor(days / 7)}sem`;
+}
+
 const postTypes: { value: PostType; label: string }[] = [
   { value: "musique", label: "Musique" },
   { value: "article", label: "Article" },
@@ -126,6 +136,16 @@ const postTypes: { value: PostType; label: string }[] = [
 ];
 
 const categoryList = ["Géopolitique", "Histoire", "Science", "Art", "Musique", "Littérature", "Tech"];
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+type FeedTab = "tout" | "musique" | "livre" | "article" | "reflexion";
+const TABS: { value: FeedTab; label: string; icon: string }[] = [
+  { value: "tout", label: "Tout", icon: "✨" },
+  { value: "musique", label: "Musique", icon: "♫" },
+  { value: "livre", label: "Livres", icon: "📚" },
+  { value: "article", label: "Articles", icon: "📰" },
+  { value: "reflexion", label: "Réflexions", icon: "💭" },
+];
 
 // ── OG Preview hook ───────────────────────────────────────────────────────
 function useOgPreview(url: string | null) {
@@ -147,42 +167,6 @@ function useOgPreview(url: string | null) {
   return og;
 }
 
-// ── Group posts into shelves by user ──────────────────────────────────────
-type ShelfGroup = {
-  userId: string;
-  name: string;
-  username: string;
-  avatarUrl: string | null;
-  posts: Post[];
-  isListening: boolean;
-};
-
-function groupIntoShelves(posts: Post[]): ShelfGroup[] {
-  const map = new Map<string, ShelfGroup>();
-  for (const post of posts) {
-    const existing = map.get(post.user_id);
-    if (existing) {
-      existing.posts.push(post);
-    } else {
-      map.set(post.user_id, {
-        userId: post.user_id,
-        name: post.profiles?.name ?? post.profiles?.username ?? "Quelqu'un",
-        username: post.profiles?.username ?? "",
-        avatarUrl: post.profiles?.avatar_url ?? null,
-        posts: [post],
-        isListening: false,
-      });
-    }
-  }
-  for (const shelf of map.values()) {
-    const recentMusic = shelf.posts.find(
-      (p) => p.type === "musique" && Date.now() - new Date(p.created_at).getTime() < 2 * 60 * 60 * 1000
-    );
-    if (recentMusic) shelf.isListening = true;
-  }
-  return [...map.values()];
-}
-
 // ── Avatar ────────────────────────────────────────────────────────────────
 function Avatar({ initials, size, background, color }: { initials: string; size: number; background: string; color: string }) {
   return (
@@ -195,9 +179,30 @@ function Avatar({ initials, size, background, color }: { initials: string; size:
   );
 }
 
-// ── Shelf item components — BIGGER for cinematic look ────────────────────
+// ── Post type badges ─────────────────────────────────────────────────────
+function TypeBadge({ type, t }: { type: PostType; t: typeof LIGHT }) {
+  const cfg: Record<PostType, { label: string; icon: string; bg: string }> = {
+    musique: { label: "Musique", icon: "♫", bg: "rgba(142,155,224,0.15)" },
+    livre: { label: "Livre", icon: "📚", bg: "rgba(196,169,74,0.15)" },
+    article: { label: "Article", icon: "📰", bg: "rgba(22,163,74,0.15)" },
+    reflexion: { label: "Réflexion", icon: "💭", bg: "rgba(212,83,126,0.15)" },
+  };
+  const c = cfg[type];
+  return (
+    <span style={{
+      fontSize: 11, fontFamily: UI, fontWeight: 500,
+      padding: "3px 10px", borderRadius: 20,
+      background: c.bg, color: t.text,
+      display: "inline-flex", alignItems: "center", gap: 4,
+    }}>
+      {c.icon} {c.label}
+    </span>
+  );
+}
 
-function MusicShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
+// ── Individual feed cards per type ───────────────────────────────────────
+
+function MusicFeedCard({ post, t }: { post: Post; t: typeof LIGHT }) {
   const track = parseShortcutTrack(post.metadata);
   const embed = post.type === "musique" ? parseEmbed(post.metadata) : null;
   const artwork = track?.artwork ?? embed?.thumbnail ?? null;
@@ -206,141 +211,157 @@ function MusicShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const url = track?.trackUrl ?? post.url;
   const [imgFailed, setImgFailed] = useState(false);
 
-  const cover = (
-    <div className="shelf-item group" style={{ width: 170, flexShrink: 0 }}>
-      <div className="relative overflow-hidden" style={{ width: 170, height: 170, borderRadius: 10, background: t.surface }}>
+  return (
+    <div className="flex" style={{ gap: 16 }}>
+      {/* Album art */}
+      <div style={{ width: 120, height: 120, borderRadius: 10, overflow: "hidden", background: t.surface, flexShrink: 0 }}>
         {artwork && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={artwork} alt={title} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setImgFailed(true)} />
         ) : (
-          <div className="flex h-full items-center justify-center" style={{ fontSize: 40, color: t.ink(0.12) }}>&#9835;</div>
+          <div className="flex h-full items-center justify-center" style={{ fontSize: 36, color: t.ink(0.12) }}>&#9835;</div>
         )}
       </div>
-      <p className="mt-2 truncate" style={{ fontSize: 13, fontWeight: 500, color: t.text, fontFamily: UI }}>{title}</p>
-      {artist && <p className="truncate" style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>{artist}</p>}
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
+        <p style={{ fontSize: 17, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.3 }}>{title}</p>
+        {artist && <p style={{ fontSize: 14, color: t.muted, fontFamily: UI, marginTop: 2 }}>{artist}</p>}
+        {url && (
+          <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: t.primary, fontFamily: UI, marginTop: 8, textDecoration: "none" }}>
+            &Eacute;couter &rarr;
+          </a>
+        )}
+      </div>
     </div>
   );
-
-  return url ? (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>{cover}</a>
-  ) : cover;
 }
 
-function BookShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
+function BookFeedCard({ post, t }: { post: Post; t: typeof LIGHT }) {
   const link = safeUrl(post.url);
   const [imgFailed, setImgFailed] = useState(false);
   const meta = post.metadata as Record<string, unknown> | undefined;
   const coverImg = httpsOrNull(meta?.cover_url) ?? httpsOrNull(meta?.image);
   const parts = post.content.split(" — ");
-  const bookTitle = parts[0]?.slice(0, 50) ?? post.content.slice(0, 50);
+  const bookTitle = parts[0]?.slice(0, 80) ?? post.content.slice(0, 80);
   const author = parts[1] ?? null;
 
-  const content = (
-    <div className="shelf-item" style={{ width: 130, flexShrink: 0 }}>
-      <div className="relative overflow-hidden" style={{ width: 130, height: 190, borderRadius: 6, background: t.surface }}>
+  return (
+    <div className="flex" style={{ gap: 16 }}>
+      <div style={{ width: 90, height: 130, borderRadius: 6, overflow: "hidden", background: t.surface, flexShrink: 0 }}>
         {coverImg && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={coverImg} alt={bookTitle} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setImgFailed(true)} />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center p-3 text-center" style={{ background: t.surface }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.3 }}>{bookTitle}</span>
+          <div className="flex h-full flex-col items-center justify-center p-2 text-center" style={{ background: t.surface }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: t.text, fontFamily: UI }}>{bookTitle}</span>
           </div>
         )}
       </div>
-      <p className="mt-2 truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text, fontFamily: UI }}>{bookTitle}</p>
-      {author && <p className="truncate" style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>{author}</p>}
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
+        <p style={{ fontSize: 17, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.3 }}>{bookTitle}</p>
+        {author && <p style={{ fontSize: 14, color: t.muted, fontFamily: UI, marginTop: 2 }}>{author}</p>}
+        {link && (
+          <a href={link.href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: t.primary, fontFamily: UI, marginTop: 8, textDecoration: "none" }}>
+            Voir le livre &rarr;
+          </a>
+        )}
+      </div>
     </div>
   );
-
-  return link ? (
-    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>{content}</a>
-  ) : content;
 }
 
-function ArticleShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
+function ArticleFeedCard({ post, t }: { post: Post; t: typeof LIGHT }) {
   const link = safeUrl(post.url);
   const og = useOgPreview(post.url);
   const ogImage = og?.image ?? null;
   const siteName = og?.siteName ?? og?.domain ?? null;
   const ogTitle = og?.title ?? null;
-  const displayTitle = ogTitle ?? post.content.slice(0, 90);
+  const displayTitle = ogTitle ?? post.content.slice(0, 120);
   const [imgFailed, setImgFailed] = useState(false);
 
-  const card = (
-    <div className="shelf-item" style={{ width: 220, flexShrink: 0 }}>
-      <div className="flex flex-col overflow-hidden" style={{ width: 220, height: 170, borderRadius: 10, background: t.surface, border: `1px solid ${t.line}` }}>
-        {ogImage && !imgFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={ogImage} alt="" loading="lazy" style={{ width: "100%", height: 90, objectFit: "cover", display: "block" }} onError={() => setImgFailed(true)} />
-        ) : null}
-        <div style={{ padding: "12px 16px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div>
-            {siteName && (
-              <p style={{ fontSize: 10, color: t.muted, fontFamily: MONO, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{siteName}</p>
-            )}
-            <p style={{ fontSize: 13, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: ogImage ? 2 : 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>{displayTitle}</p>
-          </div>
-          {post.category && <p style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>{post.category}</p>}
+  return (
+    <div>
+      {ogImage && !imgFailed && (
+        <div style={{ marginBottom: 12, borderRadius: 10, overflow: "hidden", maxHeight: 200 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ogImage} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={() => setImgFailed(true)} />
         </div>
-      </div>
-    </div>
-  );
-
-  return link ? (
-    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>{card}</a>
-  ) : card;
-}
-
-function QuoteShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
-  return (
-    <div className="shelf-item" style={{ width: 220, flexShrink: 0 }}>
-      <div className="flex items-start" style={{ width: 220, minHeight: 170, borderRadius: 10, background: t.surface, padding: 18, border: `1px solid ${t.line}` }}>
-        <p style={{ fontSize: 15, color: t.text, fontFamily: READING, fontWeight: 400, lineHeight: 1.55, fontStyle: "italic", display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
-          &laquo; {post.content.slice(0, 200)} &raquo;
+      )}
+      {siteName && (
+        <p style={{ fontSize: 11, color: t.muted, fontFamily: MONO, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>{siteName}</p>
+      )}
+      <p style={{ fontSize: 17, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.35 }}>{displayTitle}</p>
+      {og?.description && (
+        <p style={{ fontSize: 13, color: t.muted, fontFamily: UI, lineHeight: 1.5, marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
+          {og.description}
         </p>
-      </div>
-      {post.category && <p className="mt-1.5" style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>{post.category}</p>}
+      )}
+      {link && (
+        <a href={link.href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: t.primary, fontFamily: UI, marginTop: 8, display: "inline-block", textDecoration: "none" }}>
+          Lire l&apos;article &rarr;
+        </a>
+      )}
     </div>
   );
 }
 
-// ── Shelf row for one person ──────────────────────────────────────────────
-function PersonShelf({ shelf, t }: { shelf: ShelfGroup; t: typeof LIGHT }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const count = shelf.posts.length;
-  const subtitle = shelf.isListening
-    ? "écoute en ce moment"
-    : `${count} ${count > 1 ? "partages" : "partage"} récent${count > 1 ? "s" : ""}`;
-  const tone = avatarTones[(shelf.userId.charCodeAt(0) + shelf.userId.charCodeAt(1)) % avatarTones.length];
+function ReflexionFeedCard({ post, t }: { post: Post; t: typeof LIGHT }) {
+  return (
+    <div>
+      <blockquote style={{
+        fontSize: 17, color: t.text, fontFamily: READING,
+        fontStyle: "italic", lineHeight: 1.6,
+        borderLeft: `3px solid ${t.primary}`,
+        paddingLeft: 16, margin: 0,
+      }}>
+        {post.content}
+      </blockquote>
+      {post.category && (
+        <p style={{ fontSize: 11, color: t.muted, fontFamily: UI, marginTop: 10 }}>{post.category}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Social feed post wrapper ─────────────────────────────────────────────
+function FeedPost({ post, t }: { post: Post; t: typeof LIGHT }) {
+  const tone = avatarTones[((post.user_id?.charCodeAt(0) ?? 0) + (post.user_id?.charCodeAt(1) ?? 0)) % avatarTones.length];
+  const authorName = post.profiles?.name ?? post.profiles?.username ?? "Quelqu'un";
+  const authorUsername = post.profiles?.username ?? "";
 
   return (
-    <section style={{ marginBottom: 48 }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${t.line}` }}>
-        <Link href={`/profile?id=${shelf.userId}`} className="flex items-center" style={{ gap: 12, textDecoration: "none" }}>
-          <Avatar initials={getInitials(shelf.name, shelf.username)} size={36} {...tone} />
+    <article style={{
+      background: t.surface,
+      borderRadius: 16,
+      padding: "20px 24px",
+      border: `1px solid ${t.line}`,
+    }}>
+      {/* Author header */}
+      <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
+        <Link href={`/profile?id=${post.user_id}`} className="flex items-center" style={{ gap: 10, textDecoration: "none" }}>
+          <Avatar initials={getInitials(post.profiles?.name ?? null, authorUsername)} size={38} {...tone} />
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em", lineHeight: 1 }}>
-              {shelf.name.split(" ")[0]}
-            </h2>
-            <span style={{ fontSize: 12, color: t.muted, fontFamily: UI }}>
-              {subtitle}
-              {shelf.isListening && <span style={{ marginLeft: 6, color: "#16A34A" }}>&#9679;</span>}
-            </span>
+            <p style={{ fontSize: 14, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.2 }}>{authorName}</p>
+            <p style={{ fontSize: 12, color: t.muted, fontFamily: UI }}>
+              @{authorUsername} &middot; {timeAgo(post.created_at)}
+            </p>
           </div>
         </Link>
-        <Link href={`/profile?id=${shelf.userId}`} style={{ fontSize: 12, color: t.primary, fontFamily: UI, textDecoration: "none" }}>
-          Voir l&apos;étagère &rarr;
-        </Link>
+        <TypeBadge type={post.type} t={t} />
       </div>
-      <div ref={scrollRef} className="shelf-scroll flex overflow-x-auto" style={{ gap: 16, paddingBottom: 4 }}>
-        {shelf.posts.map((post) => {
-          if (post.type === "musique") return <MusicShelfItem key={post.id} post={post} t={t} />;
-          if (post.type === "livre") return <BookShelfItem key={post.id} post={post} t={t} />;
-          if (post.type === "reflexion") return <QuoteShelfItem key={post.id} post={post} t={t} />;
-          return <ArticleShelfItem key={post.id} post={post} t={t} />;
-        })}
-      </div>
-    </section>
+
+      {/* Content by type */}
+      {post.type === "musique" && <MusicFeedCard post={post} t={t} />}
+      {post.type === "livre" && <BookFeedCard post={post} t={t} />}
+      {post.type === "article" && <ArticleFeedCard post={post} t={t} />}
+      {post.type === "reflexion" && <ReflexionFeedCard post={post} t={t} />}
+
+      {/* Social actions */}
+      <SocialActions
+        likes={post.likes_count ?? 0}
+        comments={0}
+        postId={post.id}
+      />
+    </article>
   );
 }
 
@@ -435,7 +456,7 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
             {musicLoading && <p className="mt-2" style={{ fontSize: 11, color: t.muted }}>Recherche&hellip;</p>}
             {musicEmbed && !musicLoading && (
               <div className="mt-2">
-                <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>&check; Trouvé</p>
+                <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>&check; Trouv&eacute;</p>
                 <SharedMusicCard embed={musicEmbed} href={url.trim()} />
               </div>
             )}
@@ -467,22 +488,79 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
   );
 }
 
-// ── Loading skeleton ──────────────────────────────────────────────────────
-function ShelfSkeleton({ t }: { t: typeof LIGHT }) {
+// ── Skeleton ──────────────────────────────────────────────────────────────
+function FeedSkeleton({ t }: { t: typeof LIGHT }) {
   return (
-    <div className="animate-pulse" style={{ marginBottom: 48 }}>
-      <div className="flex items-center" style={{ gap: 12, marginBottom: 16 }}>
-        <div style={{ width: 36, height: 36, background: t.surface, borderRadius: "50%" }} />
-        <div>
-          <div style={{ width: 100, height: 16, background: t.surface, borderRadius: 4 }} />
-          <div className="mt-1" style={{ width: 140, height: 12, background: t.surface, borderRadius: 4 }} />
+    <div className="flex flex-col" style={{ gap: 16 }}>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="animate-pulse" style={{ background: t.surface, borderRadius: 16, padding: 24, border: `1px solid ${t.line}` }}>
+          <div className="flex items-center" style={{ gap: 10, marginBottom: 14 }}>
+            <div style={{ width: 38, height: 38, background: t.ground, borderRadius: "50%" }} />
+            <div>
+              <div style={{ width: 100, height: 14, background: t.ground, borderRadius: 4 }} />
+              <div className="mt-1" style={{ width: 140, height: 10, background: t.ground, borderRadius: 4 }} />
+            </div>
+          </div>
+          <div style={{ width: "80%", height: 16, background: t.ground, borderRadius: 4 }} />
+          <div className="mt-2" style={{ width: "50%", height: 14, background: t.ground, borderRadius: 4 }} />
         </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Follow suggestion sidebar ────────────────────────────────────────────
+function SuggestionsPanel({ t, userId }: { t: typeof LIGHT; userId: string | undefined }) {
+  const [suggestions, setSuggestions] = useState<PublicProfile[]>([]);
+  const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    getSuggested(userId, 5).then((results) => { if (!cancelled) setSuggestions(results); });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const handleFollow = async (targetId: string) => {
+    if (!userId) return;
+    const ok = await followUser(userId, targetId);
+    if (ok) setFollowedSet((prev) => new Set(prev).add(targetId));
+  };
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div style={{ background: t.surface, borderRadius: 16, padding: 20, border: `1px solid ${t.line}` }}>
+      <h3 style={{ fontSize: 15, fontWeight: 700, color: t.text, fontFamily: DISPLAY, marginBottom: 14 }}>
+        Personnes &agrave; suivre
+      </h3>
+      <div className="flex flex-col" style={{ gap: 12 }}>
+        {suggestions.map((s) => {
+          const displayName = s.name ?? s.username;
+          const tone = avatarTones[(s.id.charCodeAt(0) + (s.id.charCodeAt(1) || 0)) % avatarTones.length];
+          const followed = followedSet.has(s.id);
+          return (
+            <div key={s.id} className="flex items-center" style={{ gap: 10 }}>
+              <Avatar initials={getInitials(s.name, s.username)} size={32} {...tone} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate" style={{ fontSize: 13, fontWeight: 500, color: t.text, fontFamily: UI }}>{displayName}</p>
+                <p className="truncate" style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>@{s.username}</p>
+              </div>
+              {followed ? (
+                <span style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>Suivi &check;</span>
+              ) : (
+                <button type="button" onClick={() => handleFollow(s.id)}
+                  style={{ fontSize: 11, color: t.primary, background: "none", border: `1px solid ${t.line}`, borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontFamily: UI }}>
+                  Suivre
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <div className="flex" style={{ gap: 16 }}>
-        {[0, 1, 2, 3, 4, 5].map((j) => (
-          <div key={j} style={{ width: 170, height: 170, background: t.surface, borderRadius: 10, flexShrink: 0 }} />
-        ))}
-      </div>
+      <Link href="/explore" style={{ display: "block", marginTop: 14, fontSize: 12, color: t.primary, fontFamily: UI, textDecoration: "none" }}>
+        Explorer les profils &rarr;
+      </Link>
     </div>
   );
 }
@@ -500,14 +578,15 @@ export default function Dashboard() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [mine, setMine] = useState<Record<string, MyInteractions>>({});
+  const [activeTab, setActiveTab] = useState<FeedTab>("tout");
 
   const css = `
     @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@800&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Literata:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400&display=swap');
     .shelf-scroll { scrollbar-width: none; }
     .shelf-scroll::-webkit-scrollbar { display: none; }
-    .shelf-item { transition: transform 0.18s ease; }
-    .shelf-item:hover { transform: translateY(-4px); }
+    .feed-tab { transition: all 0.15s ease; }
+    .feed-tab:hover { opacity: 1; }
     ${socialCss}
   `;
 
@@ -533,7 +612,7 @@ export default function Dashboard() {
       try {
         const res = await fetch("/api/feed", { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) { loaded = (await res.json()) as Post[]; }
-      } catch { /* network error - fall back */ }
+      } catch {}
     }
 
     if (!loaded) {
@@ -541,7 +620,7 @@ export default function Dashboard() {
         .from("posts").select(POST_SELECT)
         .not("content", "ilike", "%Morceau actuel%")
         .not("content", "ilike", "%Test du Raccourci%")
-        .order("created_at", { ascending: false }).limit(40);
+        .order("created_at", { ascending: false }).limit(60);
       if (error) { setFeedError(error.message); return; }
       loaded = data as Post[];
     }
@@ -577,7 +656,13 @@ export default function Dashboard() {
   }, [userId, loadPosts]);
 
   const closeModal = useCallback(() => setModalOpen(false), []);
-  const shelves = useMemo(() => posts ? groupIntoShelves(posts) : [], [posts]);
+
+  // Filtered posts by tab
+  const filteredPosts = useMemo(() => {
+    if (!posts) return [];
+    if (activeTab === "tout") return posts;
+    return posts.filter((p) => p.type === activeTab);
+  }, [posts, activeTab]);
 
   if (!session) return <div className="min-h-screen" style={{ background: t.ground }} />;
 
@@ -594,15 +679,22 @@ export default function Dashboard() {
           background: dark ? "rgba(18,26,58,0.85)" : "rgba(236,238,234,0.85)",
           backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
         }}>
-          <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1200, padding: "16px 28px" }}>
+          <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1200, padding: "14px 28px" }}>
             <Link href="/dashboard" style={{ fontSize: 20, fontWeight: 800, color: t.text, fontFamily: DISPLAY, textDecoration: "none", letterSpacing: "-0.03em" }}>
               boredboard
             </Link>
-            <div className="flex items-center" style={{ gap: 12 }}>
+            <div className="flex items-center" style={{ gap: 10 }}>
+              <button type="button" onClick={() => setModalOpen(true)} style={{
+                background: t.primary, color: t.onPrimary,
+                fontSize: 13, fontWeight: 600, fontFamily: UI,
+                padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
+              }}>
+                + Partager
+              </button>
               <button type="button" onClick={toggle} style={{
-                fontSize: 13, fontWeight: 500, fontFamily: UI,
-                padding: "8px 18px", borderRadius: 20,
-                border: `1px solid ${t.line}`, background: "transparent", color: t.text, cursor: "pointer",
+                fontSize: 12, fontWeight: 500, fontFamily: UI,
+                padding: "8px 16px", borderRadius: 20,
+                border: `1px solid ${t.line}`, background: "transparent", color: t.muted, cursor: "pointer",
               }}>
                 {dark ? "Mode jour" : "Mode nuit"}
               </button>
@@ -617,59 +709,79 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Hero section */}
-        {!hasPosts || posts === null ? (
-          <div style={{ paddingTop: 80 }}>
-            <main className="mx-auto" style={{ maxWidth: 1200, padding: "0 28px" }}>
-              <div style={{ paddingTop: "10vh", paddingBottom: 48 }}>
-                <h1 style={{
-                  fontSize: "clamp(36px, 5.5vw, 72px)", fontWeight: 400, fontStyle: "italic",
-                  fontFamily: HERO_SERIF, color: t.text, lineHeight: 1.1, letterSpacing: "-0.02em", maxWidth: 900,
-                }}>
-                  Regarde ce que lisent et &eacute;coutent les gens curieux autour de toi.
-                </h1>
-                <p style={{
-                  marginTop: 28, fontSize: "clamp(15px, 1.4vw, 18px)", color: t.muted,
-                  fontFamily: UI, lineHeight: 1.65, maxWidth: 600,
-                }}>
-                  Partage un morceau depuis Apple Music ou Spotify, un article, le livre que tu as sur ta table de nuit. Tes amis voient ton &eacute;tag&egrave;re, tu vois la leur.
-                </p>
-                <div className="flex flex-wrap" style={{ gap: 12, marginTop: 36 }}>
-                  <button type="button" onClick={() => setModalOpen(true)} style={{
-                    background: dark ? "#E6E8E3" : t.primary, color: dark ? "#121A3A" : t.onPrimary,
-                    fontSize: 15, fontWeight: 600, fontFamily: UI, padding: "14px 32px", borderRadius: 10, border: "none", cursor: "pointer",
-                  }}>
-                    Cr&eacute;er mon &eacute;tag&egrave;re
-                  </button>
-                  <Link href="/explore" style={{
-                    fontSize: 15, fontWeight: 500, fontFamily: UI, color: t.text, textDecoration: "none",
-                    padding: "14px 32px", borderRadius: 10, border: `1px solid ${t.line}`, display: "inline-flex", alignItems: "center",
-                  }}>
-                    Voir une &eacute;tag&egrave;re d&apos;exemple
-                  </Link>
-                </div>
-              </div>
+        <div style={{ paddingTop: 70 }}>
+          {/* Hero — always visible, smaller when there are posts */}
+          <div className="mx-auto" style={{ maxWidth: 1200, padding: "0 28px" }}>
+            <div style={{ paddingTop: hasPosts ? "4vh" : "8vh", paddingBottom: hasPosts ? 20 : 40 }}>
+              <h1 style={{
+                fontSize: hasPosts ? "clamp(24px, 3vw, 36px)" : "clamp(36px, 5.5vw, 72px)",
+                fontWeight: 400, fontStyle: "italic",
+                fontFamily: HERO_SERIF, color: t.text, lineHeight: 1.1, letterSpacing: "-0.02em",
+                maxWidth: 900, transition: "font-size 0.3s ease",
+              }}>
+                {hasPosts ? "Les étagères autour de toi" : "Regarde ce que lisent et écoutent les gens curieux autour de toi."}
+              </h1>
 
-              {posts === null ? (
-                <div style={{ paddingTop: 20 }}><ShelfSkeleton t={t} /></div>
-              ) : (
-                <div style={{ paddingTop: 20, opacity: 0.5 }}>
-                  <div className="shelf-scroll flex overflow-x-auto" style={{ gap: 16, paddingBottom: 24 }}>
-                    {[
-                      { w: 170, h: 170, r: 10 }, { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
-                      { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 }, { w: 220, h: 170, r: 10 },
-                      { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
-                    ].map((s, i) => (
-                      <div key={i} style={{ width: s.w, height: s.h, borderRadius: s.r, background: t.surface, flexShrink: 0 }} />
-                    ))}
+              {!hasPosts && (
+                <>
+                  <p style={{
+                    marginTop: 24, fontSize: "clamp(15px, 1.4vw, 18px)", color: t.muted,
+                    fontFamily: UI, lineHeight: 1.65, maxWidth: 600,
+                  }}>
+                    Partage un morceau depuis Apple Music ou Spotify, un article, le livre que tu as sur ta table de nuit. Tes amis voient ton &eacute;tag&egrave;re, tu vois la leur.
+                  </p>
+                  <div className="flex flex-wrap" style={{ gap: 12, marginTop: 32 }}>
+                    <button type="button" onClick={() => setModalOpen(true)} style={{
+                      background: dark ? "#E6E8E3" : t.primary, color: dark ? "#121A3A" : t.onPrimary,
+                      fontSize: 15, fontWeight: 600, fontFamily: UI, padding: "14px 32px", borderRadius: 10, border: "none", cursor: "pointer",
+                    }}>
+                      Cr&eacute;er mon &eacute;tag&egrave;re
+                    </button>
+                    <Link href="/explore" style={{
+                      fontSize: 15, fontWeight: 500, fontFamily: UI, color: t.text, textDecoration: "none",
+                      padding: "14px 32px", borderRadius: 10, border: `1px solid ${t.line}`, display: "inline-flex", alignItems: "center",
+                    }}>
+                      Voir une &eacute;tag&egrave;re d&apos;exemple
+                    </Link>
                   </div>
-                </div>
+                </>
               )}
-            </main>
+            </div>
           </div>
-        ) : (
-          /* Feed: full-width shelves */
-          <main className="mx-auto" style={{ maxWidth: 1200, padding: "100px 28px 96px" }}>
+
+          {/* Tab bar */}
+          {hasPosts && (
+            <div style={{ borderBottom: `1px solid ${t.line}`, marginBottom: 28 }}>
+              <div className="mx-auto shelf-scroll flex overflow-x-auto" style={{ maxWidth: 1200, padding: "0 28px", gap: 4 }}>
+                {TABS.map((tab) => {
+                  const active = activeTab === tab.value;
+                  const count = tab.value === "tout" ? posts?.length ?? 0 : posts?.filter((p) => p.type === tab.value).length ?? 0;
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => setActiveTab(tab.value)}
+                      className="feed-tab"
+                      style={{
+                        fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: UI,
+                        padding: "12px 18px", cursor: "pointer",
+                        background: "transparent", border: "none",
+                        color: active ? t.text : t.muted,
+                        borderBottom: active ? `2px solid ${t.primary}` : "2px solid transparent",
+                        opacity: active ? 1 : 0.7,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {tab.icon} {tab.label} <span style={{ fontSize: 11, opacity: 0.6 }}>({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Main content area */}
+          <div className="mx-auto" style={{ maxWidth: 1200, padding: "0 28px 96px" }}>
             {feedError ? (
               <div className="text-center" style={{ padding: "60px 20px" }}>
                 <p style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: UI }}>Impossible de charger le feed</p>
@@ -678,23 +790,41 @@ export default function Dashboard() {
                   R&eacute;essayer
                 </button>
               </div>
-            ) : (
-              <div>
-                <div style={{ marginBottom: 48 }}>
-                  <h1 style={{
-                    fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, fontStyle: "italic",
-                    fontFamily: HERO_SERIF, color: t.text, lineHeight: 1.15, letterSpacing: "-0.02em",
-                  }}>
-                    Les &eacute;tag&egrave;res autour de toi
-                  </h1>
+            ) : posts === null ? (
+              <FeedSkeleton t={t} />
+            ) : hasPosts ? (
+              <div className="grid gap-8" style={{ gridTemplateColumns: "1fr", maxWidth: 680 }}>
+                {/* Social feed */}
+                <div className="flex flex-col" style={{ gap: 16 }}>
+                  {filteredPosts.map((post) => (
+                    <FeedPost key={post.id} post={post} t={t} />
+                  ))}
+                  {filteredPosts.length === 0 && (
+                    <div className="text-center" style={{ padding: "48px 20px" }}>
+                      <p style={{ fontSize: 40, marginBottom: 12 }}>{TABS.find((tab) => tab.value === activeTab)?.icon}</p>
+                      <p style={{ fontSize: 15, color: t.muted, fontFamily: UI }}>
+                        Aucun contenu dans cette cat&eacute;gorie pour le moment.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                {shelves.map((shelf) => (
-                  <PersonShelf key={shelf.userId} shelf={shelf} t={t} />
-                ))}
+              </div>
+            ) : (
+              /* Empty state placeholder */
+              <div style={{ opacity: 0.4 }}>
+                <div className="shelf-scroll flex overflow-x-auto" style={{ gap: 16, paddingBottom: 24 }}>
+                  {[
+                    { w: 170, h: 170, r: 10 }, { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
+                    { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 }, { w: 220, h: 170, r: 10 },
+                    { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
+                  ].map((s, i) => (
+                    <div key={i} style={{ width: s.w, height: s.h, borderRadius: s.r, background: t.surface, flexShrink: 0 }} />
+                  ))}
+                </div>
               </div>
             )}
-          </main>
-        )}
+          </div>
+        </div>
 
         {/* Mobile FAB */}
         <button type="button" onClick={() => setModalOpen(true)} aria-label="Nouveau post"
