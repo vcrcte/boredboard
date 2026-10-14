@@ -3,58 +3,44 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type FormEvent,
-  type ReactNode,
+
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
-import Navbar, { getInitials } from "@/components/Navbar";
+import { getInitials } from "@/components/Navbar";
 import SharedMusicCard from "@/components/MusicCard";
-import Customizer from "@/components/dashboard/Customizer";
-import Actions, { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
-import {
-  DiscussionsCard,
-  NowListeningCard,
-  ReadingNowCard,
-  socialCardsCss,
-} from "@/components/dashboard/SocialCards";
+import { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
 import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
-import {
-  DEFAULT_PREFERENCES,
-  readLocalPreferences,
-  readRemotePreferences,
-  savePreferences,
-  type ModuleId,
-  type Preferences,
-} from "@/lib/preferences";
 import { ensureProfile } from "@/lib/profile";
 import { claimReferral } from "@/lib/referral";
 import { avatarTones } from "@/lib/sample-data";
-import { getUserPodcastSubscriptions } from "@/lib/podcasts";
-import { getFollowing, type PublicProfile } from "@/lib/social";
+import { getFollowing, getSuggested, follow as followUser, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
-// ── Theme tokens (light/dark) ─────────────────────────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────
+const DISPLAY = "'Cabinet Grotesk', system-ui, sans-serif";
+const UI = "Satoshi, system-ui, sans-serif";
+const READING = "Literata, Georgia, serif";
+const MONO = "'JetBrains Mono', monospace";
+
 const LIGHT = {
-  cream: "#F7F4EE", surface: "#F0EBE1", white: "#FFFFFF",
-  text: "#1C1A15", indigo: "#2A3560",
-  ink: (a: number) => `rgba(28,26,21,${a})`,
-  black: (a: number) => `rgba(0,0,0,${a})`,
-  warmShadow: "0 2px 12px rgba(28,26,21,0.06), 0 0 0 1px rgba(0,0,0,0.04)",
-  hoverShadow: "0 4px 20px rgba(28,26,21,0.1), 0 0 0 1px rgba(0,0,0,0.06)",
+  ground: "#ECEEEA", surface: "#FAFAF8", text: "#15171A",
+  muted: "#5D6168", primary: "#2A3560", onPrimary: "#FAFAF8",
+  line: "rgba(21,23,26,0.10)",
+  ink: (a: number) => `rgba(21,23,26,${a})`,
 };
 
 const DARK = {
-  cream: "#1A1A2E", surface: "#16213E", white: "#1E1E30",
-  text: "#E8E6E1", indigo: "#7B8CDE",
-  ink: (a: number) => `rgba(232,230,225,${a})`,
-  black: (a: number) => `rgba(255,255,255,${a})`,
-  warmShadow: "0 2px 12px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06)",
-  hoverShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08)",
+  ground: "#121A3A", surface: "#1B2450", text: "#E6E8E3",
+  muted: "#A3A8B8", primary: "#8E9BE0", onPrimary: "#121A3A",
+  line: "rgba(255,255,255,0.10)",
+  ink: (a: number) => `rgba(230,232,227,${a})`,
 };
 
 function useTheme() {
@@ -69,8 +55,7 @@ function useTheme() {
   return dark ? DARK : LIGHT;
 }
 
-const ACCENT_GRADIENT = "linear-gradient(135deg, #2A3560, #534AB7)";
-
+// ── Types ─────────────────────────────────────────────────────────────────
 type PostType = "article" | "reflexion" | "livre" | "musique";
 
 type Post = {
@@ -98,60 +83,7 @@ type OgData = { title: string | null; description: string | null; image: string 
 // The FK is named because profiles.referred_by_post also links the two tables (2026-10-14 migration).
 const POST_SELECT = "*, profiles!posts_user_id_fkey (id, name, username, avatar_url)";
 
-const filters = ["Tout", "Actualités", "Musique", "Livres", "Podcasts", "Découvertes", "Philo", "Science", "Art"];
-
-const postTypes: { value: PostType; label: string; verb: string; filter: string }[] = [
-  { value: "article", label: "Article", verb: "partage un article", filter: "Actualités" },
-  { value: "reflexion", label: "Réflexion", verb: "partage une réflexion", filter: "Découvertes" },
-  { value: "livre", label: "Livre", verb: "lit", filter: "Livres" },
-  { value: "musique", label: "Musique", verb: "partage une musique", filter: "Musique" },
-];
-
-const tones = {
-  green: { background: "rgba(29,158,117,0.1)", color: "#0F6E56" },
-  violet: { background: "rgba(131,77,255,0.08)", color: "#6B3FD4" },
-  indigo: { background: "rgba(83,74,183,0.08)", color: "#534AB7" },
-  olive: { background: "rgba(59,109,17,0.08)", color: "#3B6D11" },
-  rose: { background: "rgba(153,53,86,0.08)", color: "#993556" },
-  gold: { background: "rgba(196,169,74,0.12)", color: "#8B6914" },
-};
-
-const categories: { label: string; tone: keyof typeof tones; filter?: string }[] = [
-  { label: "Géopolitique", tone: "green" },
-  { label: "Histoire", tone: "gold" },
-  { label: "Philosophie", tone: "indigo", filter: "Philo" },
-  { label: "Science", tone: "green", filter: "Science" },
-  { label: "Art", tone: "rose", filter: "Art" },
-  { label: "Musique", tone: "violet" },
-  { label: "Littérature", tone: "olive" },
-  { label: "Tech", tone: "indigo" },
-];
-
-const navItems: { icon: string; label: string; filter?: string; href?: string }[] = [
-  { icon: "\u{1F3E0}", label: "Mon espace", filter: "Tout" },
-  { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
-  { icon: "\u{1F3B5}", label: "Musique", filter: "Musique" },
-  { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
-  { icon: "✉️", label: "Newsletter", href: "/newsletter" },
-];
-
-const spaces: { icon: string; title: string; detail: string; filter?: string; href?: string }[] = [
-  { icon: "\u{1F3B5}", title: "Musique", detail: "4 titres", filter: "Musique" },
-  { icon: "\u{1F4D6}", title: "Livres", detail: "en cours", href: "/livres" },
-  { icon: "\u{1F399}", title: "Podcasts", detail: "favoris", href: "/podcasts" },
-];
-
-function timeAgo(date: string) {
-  const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
-  if (minutes < 1) return "à l’instant";
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} j`;
-  return new Date(date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
-
+// ── Helpers ───────────────────────────────────────────────────────────────
 function safeUrl(url: string | null) {
   if (!url) return null;
   try {
@@ -160,46 +92,34 @@ function safeUrl(url: string | null) {
   } catch { return null; }
 }
 
-function postTags(post: Post) {
-  const tags = [postTypes.find((t) => t.value === post.type)?.filter];
-  tags.push(categories.find((c) => c.label === post.category)?.filter);
-  return tags.filter((t): t is string => Boolean(t));
+function httpsOrNull(v: unknown) { return typeof v === "string" && v.startsWith("https://") ? v : null; }
+function textOrNull(v: unknown) { return typeof v === "string" && v.trim() ? v.trim() : null; }
+
+type ShortcutTrack = {
+  title: string; artist: string | null; album: string | null;
+  platform: string | null; artwork: string | null; trackUrl: string | null;
+};
+
+function parseShortcutTrack(value: unknown): ShortcutTrack | null {
+  const raw = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const title = textOrNull(raw?.title);
+  if (!raw || !title || "embed_url" in raw) return null;
+  const key = String(raw.platform ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  const platform =
+    key === "apple" || key === "applemusic" ? "apple-music"
+    : key === "spotify" || key === "deezer" || key === "youtube" ? key
+    : key === "youtubemusic" ? "youtube" : null;
+  return { title, artist: textOrNull(raw.artist), album: textOrNull(raw.album), platform, artwork: httpsOrNull(raw.artwork), trackUrl: httpsOrNull(raw.trackUrl) };
 }
 
-// ── Scroll fade-in animation hook ─────────────────────────────────────────
-function useFadeIn() {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          el.style.opacity = "1";
-          el.style.transform = "translateY(0)";
-          obs.unobserve(el);
-        }
-      },
-      { threshold: 0.1 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-  return ref;
-}
+const postTypes: { value: PostType; label: string }[] = [
+  { value: "musique", label: "Musique" },
+  { value: "article", label: "Article" },
+  { value: "livre", label: "Livre" },
+  { value: "reflexion", label: "Réflexion" },
+];
 
-function FadeIn({ children, className = "" }: { children: ReactNode; className?: string }) {
-  const ref = useFadeIn();
-  return (
-    <div
-      ref={ref}
-      className={className}
-      style={{ opacity: 0, transform: "translateY(16px)", transition: "opacity 0.5s ease-out, transform 0.5s ease-out" }}
-    >
-      {children}
-    </div>
-  );
-}
+const categoryList = ["Géopolitique", "Histoire", "Science", "Art", "Musique", "Littérature", "Tech"];
 
 // ── OG Preview hook ───────────────────────────────────────────────────────
 function useOgPreview(url: string | null) {
@@ -221,502 +141,382 @@ function useOgPreview(url: string | null) {
   return og;
 }
 
-// ── Components ────────────────────────────────────────────────────────────
+
+// ── Group posts into shelves by user ──────────────────────────────────────
+type ShelfGroup = {
+  userId: string;
+  name: string;
+  username: string;
+  avatarUrl: string | null;
+  posts: Post[];
+  isListening: boolean;
+};
+
+function groupIntoShelves(posts: Post[]): ShelfGroup[] {
+  const map = new Map<string, ShelfGroup>();
+  for (const post of posts) {
+    const existing = map.get(post.user_id);
+    if (existing) {
+      existing.posts.push(post);
+    } else {
+      map.set(post.user_id, {
+        userId: post.user_id,
+        name: post.profiles?.name ?? post.profiles?.username ?? "Quelqu'un",
+        username: post.profiles?.username ?? "",
+        avatarUrl: post.profiles?.avatar_url ?? null,
+        posts: [post],
+        isListening: false,
+      });
+    }
+  }
+  for (const shelf of map.values()) {
+    const recentMusic = shelf.posts.find(
+      (p) => p.type === "musique" && Date.now() - new Date(p.created_at).getTime() < 2 * 60 * 60 * 1000
+    );
+    if (recentMusic) shelf.isListening = true;
+  }
+  return [...map.values()];
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────
 function Avatar({ initials, size, background, color }: { initials: string; size: number; background: string; color: string }) {
   return (
     <span
       className="flex shrink-0 items-center justify-center"
-      style={{ width: size, height: size, background, color, borderRadius: "50%", fontSize: Math.max(9, size * 0.36), fontWeight: 500 }}
+      style={{ width: size, height: size, background, color, borderRadius: "50%", fontSize: Math.max(9, size * 0.36), fontWeight: 500, fontFamily: UI }}
     >
       {initials}
     </span>
   );
 }
 
-function Pill({ tone, children }: { tone: keyof typeof tones; children: ReactNode }) {
-  return (
-    <span className="shrink-0" style={{ ...tones[tone], fontSize: 10, borderRadius: 10, padding: "2px 8px" }}>
-      {children}
-    </span>
-  );
-}
+// ── Shelf item components ─────────────────────────────────────────────────
 
-function SectionLabel({ children, t }: { children: ReactNode; t: typeof LIGHT }) {
-  return (
-    <h2 className="mb-3" style={{ fontSize: 9, color: t.ink(0.35), letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 400 }}>
-      {children}
-    </h2>
-  );
-}
+/** Album/track cover in the shelf */
+function MusicShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
+  const track = parseShortcutTrack(post.metadata);
+  const embed = post.type === "musique" ? parseEmbed(post.metadata) : null;
+  const artwork = track?.artwork ?? embed?.artwork ?? null;
+  const title = track?.title ?? embed?.title ?? post.content;
+  const artist = track?.artist ?? embed?.artist ?? null;
+  const url = track?.trackUrl ?? post.url;
+  const [imgFailed, setImgFailed] = useState(false);
 
-function Divider({ t }: { t: typeof LIGHT }) {
-  return <div className="my-4" style={{ height: 1, background: t.black(0.06) }} />;
-}
-
-function CardHeader({ avatar, name, verb, pill, time, t }: {
-  avatar: ReactNode; name: string; verb: string; pill?: ReactNode; time?: string; t: typeof LIGHT;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      {avatar}
-      <div className="min-w-0 flex-1">
-        <p className="truncate" style={{ fontSize: 13 }}>
-          <span style={{ fontWeight: 600, color: t.text }}>{name}</span>{" "}
-          <span style={{ color: t.ink(0.5) }}>{verb}</span>
-        </p>
-        <div className="mt-0.5 flex items-center gap-2">
-          {pill}
-          {time && <span style={{ fontSize: 11, color: t.ink(0.35) }}>{time}</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── OG Link Preview Card ──────────────────────────────────────────────────
-function OgPreviewCard({ url, t }: { url: string; t: typeof LIGHT }) {
-  const og = useOgPreview(url);
-  if (!og || (!og.title && !og.description && !og.image)) {
-    // Fallback to simple link
-    const link = safeUrl(url);
-    if (!link) return null;
-    return (
-      <a href={link.href} target="_blank" rel="noopener noreferrer"
-        className="mt-3 flex items-center truncate hover:underline"
-        style={{ background: t.cream, borderRadius: 10, padding: "8px 12px", fontSize: 12, color: t.indigo, gap: 6 }}>
-        <span aria-hidden>↗</span>
-        <span className="truncate">{link.hostname.replace(/^www\./, "")}{link.pathname !== "/" && link.pathname}</span>
-      </a>
-    );
-  }
-
-  return (
-    <a href={url} target="_blank" rel="noopener noreferrer"
-      className="mt-3 block overflow-hidden hover:opacity-90 transition-opacity"
-      style={{ borderRadius: 12, border: `1px solid ${t.black(0.08)}`, textDecoration: "none" }}>
-      {og.image && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={og.image}
-          alt=""
-          loading="lazy"
-          style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-        />
-      )}
-      <div style={{ padding: "10px 14px", background: t.cream }}>
-        <p className="truncate" style={{ fontSize: 11, color: t.ink(0.4), textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {og.siteName ?? og.domain ?? ""}
-        </p>
-        {og.title && (
-          <p className="mt-0.5 line-clamp-2" style={{ fontSize: 13, fontWeight: 600, color: t.text, lineHeight: 1.4 }}>
-            {og.title}
-          </p>
-        )}
-        {og.description && (
-          <p className="mt-0.5 line-clamp-2" style={{ fontSize: 11, color: t.ink(0.5), lineHeight: 1.4 }}>
-            {og.description}
-          </p>
-        )}
-      </div>
-    </a>
-  );
-}
-
-// ── Mini Spotify/Deezer embed player ──────────────────────────────────────
-function MiniPlayer({ url }: { url: string }) {
-  // Spotify
-  const spotifyMatch = /open\.spotify\.com\/(track|album|playlist)\/([a-zA-Z0-9]+)/.exec(url);
-  if (spotifyMatch) {
-    const [, type, id] = spotifyMatch;
-    return (
-      <div className="mt-3" style={{ borderRadius: 12, overflow: "hidden" }}>
-        <iframe
-          src={`https://open.spotify.com/embed/${type}/${id}?utm_source=generator&theme=0`}
-          width="100%"
-          height={type === "track" ? 80 : 152}
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          style={{ border: "none", borderRadius: 12 }}
-          title="Spotify player"
-        />
-      </div>
-    );
-  }
-
-  // Deezer
-  const deezerMatch = /deezer\.com\/(track|album|playlist)\/(\d+)/.exec(url);
-  if (deezerMatch) {
-    const [, type, id] = deezerMatch;
-    return (
-      <div className="mt-3" style={{ borderRadius: 12, overflow: "hidden" }}>
-        <iframe
-          src={`https://widget.deezer.com/widget/dark/${type}/${id}`}
-          width="100%"
-          height={type === "track" ? 80 : 152}
-          allow="encrypted-media; clipboard-write"
-          loading="lazy"
-          style={{ border: "none", borderRadius: 12 }}
-          title="Deezer player"
-        />
-      </div>
-    );
-  }
-
-  return null;
-}
-
-// ── Stories bar ────────────────────────────────────────────────────────────
-function StoriesBar({ following, posts, t }: { following: PublicProfile[]; posts: Post[] | null; t: typeof LIGHT }) {
-  const recentPosters = new Set(
-    (posts ?? [])
-      .filter((p) => Date.now() - new Date(p.created_at).getTime() < 48 * 60 * 60 * 1000)
-      .map((p) => p.user_id),
-  );
-  const activeUsers = following.filter((u) => recentPosters.has(u.id));
-  const inactiveUsers = following.filter((u) => !recentPosters.has(u.id)).slice(0, 4);
-  const allUsers = [...activeUsers, ...inactiveUsers].slice(0, 12);
-
-  if (allUsers.length === 0) return null;
-
-  return (
-    <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 14, paddingBottom: 4 }}>
-      {allUsers.map((user) => {
-        const tone = avatarTones[(user.id.charCodeAt(0) + user.id.charCodeAt(1)) % avatarTones.length];
-        const isActive = recentPosters.has(user.id);
-        return (
-          <Link key={user.id} href={`/profile?id=${user.id}`} className="flex shrink-0 flex-col items-center" style={{ gap: 4, width: 68 }}>
-            <span
-              className={isActive ? "db-story-ring" : ""}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 58, height: 58, borderRadius: "50%", padding: 3, background: isActive ? undefined : t.black(0.08) }}
-            >
-              <Avatar initials={getInitials(user.name, user.username)} size={52} {...tone} />
-            </span>
-            <span className="w-full truncate text-center" style={{ fontSize: 10, color: isActive ? t.text : t.ink(0.45), fontWeight: isActive ? 500 : 400 }}>
-              {user.name?.split(" ")[0] ?? user.username}
-            </span>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Compose prompt ────────────────────────────────────────────────────────
-function ComposePrompt({ initials, displayName, onOpen, t }: { initials: string; displayName: string; onOpen: () => void; t: typeof LIGHT }) {
-  const card: CSSProperties = { background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 14, border: "none", cursor: "pointer" };
-  return (
-    <div className="db-compose" style={card} onClick={onOpen}>
-      <div className="flex items-center gap-3">
-        <Avatar initials={initials} size={42} background={t.indigo} color={t.cream} />
-        <div className="flex-1" style={{ background: t.cream, borderRadius: 24, padding: "12px 18px", fontSize: 13, color: t.ink(0.35) }}>
-          Qu&apos;est-ce que tu partages, {displayName.split(" ")[0]} ?
-        </div>
-      </div>
-      <div className="mt-3 flex items-center justify-around" style={{ borderTop: `1px solid ${t.black(0.05)}`, paddingTop: 10 }}>
-        {[
-          { icon: "\u{1F3B5}", label: "Musique", color: "#6B3FD4" },
-          { icon: "\u{1F4D6}", label: "Livre", color: "#3B6D11" },
-          { icon: "\u{1F4F0}", label: "Article", color: "#2A3560" },
-          { icon: "\u{1F4AD}", label: "Réflexion", color: "#993556" },
-        ].map((item) => (
-          <button key={item.label} type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }}
-            className="db-hover flex items-center" style={{ gap: 6, fontSize: 12, color: item.color, padding: "4px 10px", borderRadius: 8, fontWeight: 500 }}>
-            <span aria-hidden>{item.icon}</span>{item.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Dynamic trending topics ───────────────────────────────────────────────
-function TrendingTopics({ posts, t }: { posts: Post[] | null; t: typeof LIGHT }) {
-  // Compute trending from actual post categories
-  const categoryCounts = new Map<string, number>();
-  for (const post of posts ?? []) {
-    if (post.category) {
-      categoryCounts.set(post.category, (categoryCounts.get(post.category) ?? 0) + 1);
-    }
-    // Also count by type
-    const typeLabel = postTypes.find((pt) => pt.value === post.type)?.filter;
-    if (typeLabel) {
-      categoryCounts.set(typeLabel, (categoryCounts.get(typeLabel) ?? 0) + 1);
-    }
-  }
-
-  // Fallback static trends if no posts
-  const staticTrends = [
-    { tag: "#NouvelleVague", posts: 12, category: "Cinéma" },
-    { tag: "#PrixGoncourt", posts: 8, category: "Littérature" },
-    { tag: "#Impressionnisme", posts: 6, category: "Art" },
-    { tag: "#PhiloContemporaine", posts: 5, category: "Philo" },
-    { tag: "#JazzManouche", posts: 4, category: "Musique" },
-  ];
-
-  const dynamicTrends = [...categoryCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([cat, count]) => ({
-      tag: `#${cat.replace(/\s+/g, "")}`,
-      posts: count,
-      category: cat,
-    }));
-
-  const trends = dynamicTrends.length >= 3 ? dynamicTrends : staticTrends;
-
-  return (
-    <div className="flex flex-col" style={{ gap: 0 }}>
-      {trends.map((trend, i) => (
-        <div key={trend.tag} className="db-trending" style={{ padding: "10px 10px", borderRadius: 10, cursor: "pointer" }}>
-          <div className="flex items-baseline justify-between">
-            <span style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{trend.tag}</span>
-            <span style={{ fontSize: 10, color: t.ink(0.3) }}>{trend.posts} posts</span>
-          </div>
-          <span style={{ fontSize: 10, color: t.ink(0.4) }}>{trend.category}</span>
-          {i < trends.length - 1 && <div style={{ height: 1, background: t.black(0.04), marginTop: 8 }} />}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Suggested profiles ────────────────────────────────────────────────────
-function SuggestedProfiles({ t }: { t: typeof LIGHT }) {
-  const suggestions = [
-    { name: "Marie L.", username: "marie_lit", bio: "Passionnée de littérature française" },
-    { name: "Thomas R.", username: "thomas_philo", bio: "Doctorant en philosophie" },
-    { name: "Léa M.", username: "lea_musique", bio: "Mélomane & critique musicale" },
-  ];
-  return (
-    <div className="flex flex-col" style={{ gap: 8 }}>
-      {suggestions.map((s) => {
-        const tone = avatarTones[(s.name.charCodeAt(0) + s.name.charCodeAt(1)) % avatarTones.length];
-        return (
-          <div key={s.username} className="flex items-center gap-3" style={{ padding: "6px 0" }}>
-            <Avatar initials={s.name.split(" ").map((w) => w[0]).join("")} size={38} {...tone} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{s.name}</p>
-              <p className="truncate" style={{ fontSize: 10, color: t.ink(0.4) }}>{s.bio}</p>
-            </div>
-            <Link href="/explore" style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, background: ACCENT_GRADIENT, color: LIGHT.cream, fontWeight: 500, textDecoration: "none" }}>
-              Suivre
-            </Link>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function WelcomeCard({ onNewPost, t }: { onNewPost: () => void; t: typeof LIGHT }) {
-  const card: CSSProperties = { background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 18, border: "none" };
-  return (
-    <article style={card}>
-      <div className="text-center" style={{ padding: "24px 16px" }}>
-        <p style={{ fontSize: 28 }}>{"\u{1F44B}"}</p>
-        <h3 className="mt-2" style={{ fontSize: 16, fontWeight: 600, color: t.text }}>Bienvenue sur BoredBoard</h3>
-        <p className="mx-auto mt-2" style={{ fontSize: 13, color: t.ink(0.5), lineHeight: 1.6, maxWidth: 340 }}>
-          Ton feed est vide pour l&apos;instant. Partage un article, une musique ou une réflexion pour commencer.
-        </p>
-        <button type="button" onClick={onNewPost} className="db-fab mt-4 inline-flex items-center"
-          style={{ color: LIGHT.cream, fontSize: 13, fontWeight: 500, padding: "10px 24px", borderRadius: 20, gap: 6 }}>
-          <span aria-hidden>+</span> Créer mon premier post
-        </button>
-      </div>
-    </article>
-  );
-}
-
-type ShortcutTrack = {
-  title: string; artist: string | null; album: string | null;
-  platform: keyof typeof musicPlatforms | null; artwork: string | null; trackUrl: string | null;
-};
-
-const musicPlatforms = {
-  "apple-music": { label: "Apple Music", color: "#FC3C44", background: "rgba(252,60,68,0.08)" },
-  spotify: { label: "Spotify", color: "#1DB954", background: "rgba(30,215,96,0.08)" },
-  deezer: { label: "Deezer", color: "#EF6400", background: "rgba(239,100,0,0.08)" },
-  youtube: { label: "YouTube", color: "#FF0000", background: "rgba(255,0,0,0.08)" },
-};
-
-function httpsOrNull(v: unknown) { return typeof v === "string" && v.startsWith("https://") ? v : null; }
-function textOrNull(v: unknown) { return typeof v === "string" && v.trim() ? v.trim() : null; }
-
-function parseShortcutTrack(value: unknown): ShortcutTrack | null {
-  const raw = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
-  const title = textOrNull(raw?.title);
-  if (!raw || !title || "embed_url" in raw) return null;
-  const key = String(raw.platform ?? "").toLowerCase().replace(/[^a-z]/g, "");
-  const platform =
-    key === "apple" || key === "applemusic" ? "apple-music"
-    : key === "spotify" || key === "deezer" || key === "youtube" ? key
-    : key === "youtubemusic" ? "youtube" : null;
-  return { title, artist: textOrNull(raw.artist), album: textOrNull(raw.album), platform, artwork: httpsOrNull(raw.artwork), trackUrl: httpsOrNull(raw.trackUrl) };
-}
-
-function ShortcutTrackCard({ post, track, t }: { post: Post; track: ShortcutTrack; t: typeof LIGHT }) {
-  const author = post.profiles;
-  const tone = avatarTones[(post.user_id.charCodeAt(0) + post.user_id.charCodeAt(1)) % avatarTones.length];
-  const platform = track.platform ? musicPlatforms[track.platform] : null;
-  const comment = post.content && !post.content.startsWith("J'écoute") ? post.content : null;
-  const [artworkFailed, setArtworkFailed] = useState(false);
-  const card: CSSProperties = { background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 18, border: "none" };
-
-  const info = (
-    <>
-      <span className="flex shrink-0 items-center justify-center overflow-hidden" style={{ width: 56, height: 56, borderRadius: 10, background: "rgba(131,77,255,0.1)" }}>
-        {track.artwork && !artworkFailed ? (
+  const cover = (
+    <div className="shelf-item group" style={{ width: 148, flexShrink: 0 }}>
+      <div
+        className="relative overflow-hidden"
+        style={{ width: 148, height: 148, borderRadius: 8, background: t.surface }}
+      >
+        {artwork && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" src={track.artwork} alt="" width={56} height={56} onError={() => setArtworkFailed(true)} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10 }} />
+          <img
+            src={artwork} alt={title} loading="lazy"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setImgFailed(true)}
+          />
         ) : (
-          <span aria-hidden style={{ fontSize: 24, color: platform?.color ?? "#534AB7" }}>{"\u{1F3B5}"}</span>
+          <div className="flex h-full items-center justify-center" style={{ fontSize: 36, color: t.ink(0.12) }}>♫</div>
         )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate" style={{ fontSize: 15, fontWeight: 500, color: t.text }}>{track.title}</span>
-        {track.artist && <span className="block truncate" style={{ fontSize: 13, color: t.ink(0.5) }}>{track.artist}</span>}
-        {track.album && <span className="block truncate" style={{ fontSize: 12, color: t.ink(0.35), fontStyle: "italic" }}>{track.album}</span>}
-      </span>
-      {platform && (
-        <span className="ml-auto shrink-0" style={{ fontSize: 10, borderRadius: 6, padding: "3px 8px", color: platform.color, background: platform.background }}>
-          {platform.label}
-        </span>
-      )}
-    </>
-  );
-  const playerStyle: CSSProperties = { background: t.cream, borderRadius: 12, padding: 14, gap: 14 };
-
-  return (
-    <article className="db-card-social" style={card}>
-      <CardHeader
-        avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={42} {...tone} />}
-        name={author?.name ?? author?.username ?? "Quelqu’un"}
-        verb="partage une musique"
-        pill={<span className="shrink-0" style={{ fontSize: 10, borderRadius: 10, padding: "2px 8px", background: "rgba(131,77,255,0.08)", color: "#6B3FD4" }}>Musique</span>}
-        time={timeAgo(post.created_at)}
-        t={t}
-      />
-      {track.trackUrl ? (
-        <a href={track.trackUrl} target="_blank" rel="noopener noreferrer" className="db-action mt-3 flex items-center" style={playerStyle} aria-label={`Écouter ${track.title}`}>
-          {info}
-        </a>
-      ) : (
-        <div className="mt-3 flex items-center" style={playerStyle}>{info}</div>
-      )}
-      {/* Mini player embed */}
-      {track.trackUrl && <MiniPlayer url={track.trackUrl} />}
-      {comment && (
-        <p className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: 13, color: t.ink(0.6), fontStyle: "italic", lineHeight: 1.6 }}>{comment}</p>
-      )}
-      <div className="mt-3">
-        <Actions postId={post.id} likes={post.likes_count ?? 0} comments={0} extra="↗ Partager" />
       </div>
-    </article>
+      <p className="mt-1.5 truncate" style={{ fontSize: 13, fontWeight: 500, color: t.text, fontFamily: UI }}>{title}</p>
+      {artist && <p className="truncate" style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>{artist}</p>}
+    </div>
   );
+
+  return url ? (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>
+      {cover}
+    </a>
+  ) : cover;
 }
 
-function usePostEmbed(post: Post) {
-  const stored = post.type === "musique" ? parseEmbed(post.metadata) : null;
-  const [embed, setEmbed] = useState<MusicEmbed | null>(stored);
-  const needsLookup = post.type === "musique" && !stored && Boolean(post.url);
-  useEffect(() => {
-    if (!needsLookup || !post.url) return;
-    let cancelled = false;
-    fetchEmbed(post.url).then((r) => { if (!cancelled) setEmbed(r); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [needsLookup, post.url]);
-  return embed;
-}
-
-function PostCard({ post, t }: { post: Post; t: typeof LIGHT }) {
-  const track = post.type === "musique" ? parseShortcutTrack(post.metadata) : null;
-  return track ? <ShortcutTrackCard post={post} track={track} t={t} /> : <LinkPostCard post={post} t={t} />;
-}
-
-function LinkPostCard({ post, t }: { post: Post; t: typeof LIGHT }) {
-  const embed = usePostEmbed(post);
-  const hasComment = Boolean(embed && post.content && post.content !== embed.title && !post.content.startsWith("J'écoute"));
-  const author = post.profiles;
-  const type = postTypes.find((item) => item.value === post.type);
-  const category = categories.find((item) => item.label === post.category);
+/** Book cover in the shelf */
+function BookShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
   const link = safeUrl(post.url);
-  const tone = avatarTones[(post.user_id.charCodeAt(0) + post.user_id.charCodeAt(1)) % avatarTones.length];
-  const card: CSSProperties = { background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 18, border: "none" };
+  const [imgFailed, setImgFailed] = useState(false);
+  const meta = post.metadata as Record<string, unknown> | undefined;
+  const coverImg = httpsOrNull(meta?.cover_url) ?? httpsOrNull(meta?.image);
+  const parts = post.content.split(" — ");
+  const bookTitle = parts[0]?.slice(0, 50) ?? post.content.slice(0, 50);
+  const author = parts[1] ?? null;
 
-  return (
-    <article className="db-card-social" style={card}>
-      <CardHeader
-        avatar={<Avatar initials={getInitials(author?.name ?? null, author?.username)} size={42} {...tone} />}
-        name={author?.name ?? author?.username ?? "Quelqu’un"}
-        verb={type?.verb ?? ""}
-        pill={
-          post.type === "musique" ? <Pill tone="indigo">Musique</Pill>
-          : post.category ? <Pill tone={category?.tone ?? "indigo"}>{post.category}</Pill>
-          : undefined
-        }
-        time={timeAgo(post.created_at)}
-        t={t}
-      />
-      {embed ? (
-        <>
-          {hasComment && (
-            <p className="mb-3 mt-2 whitespace-pre-wrap break-words" style={{ fontSize: 13, color: t.ink(0.6), fontStyle: "italic", lineHeight: 1.6 }}>{post.content}</p>
-          )}
-          <div className={hasComment ? "" : "mt-3"}>
-            <SharedMusicCard embed={embed} href={post.url} />
+  const content = (
+    <div className="shelf-item" style={{ width: 112, flexShrink: 0 }}>
+      <div
+        className="relative overflow-hidden"
+        style={{ width: 112, height: 162, borderRadius: 4, background: t.surface }}
+      >
+        {coverImg && !imgFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={coverImg} alt={bookTitle} loading="lazy"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center p-3 text-center" style={{ background: t.surface }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.3 }}>{bookTitle}</span>
           </div>
-          {/* Mini player for music posts with URL */}
-          {post.url && <MiniPlayer url={post.url} />}
-        </>
-      ) : (
-        <p className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: 14, color: t.text, lineHeight: 1.6 }}>{post.content}</p>
-      )}
-      {/* OG preview for article links */}
-      {link && !embed && post.type === "article" && <OgPreviewCard url={link.href} t={t} />}
-      {/* Simple link for non-article links without embed */}
-      {link && !embed && post.type !== "article" && (
-        <a href={link.href} target="_blank" rel="noopener noreferrer"
-          className="mt-3 flex items-center truncate hover:underline"
-          style={{ background: t.cream, borderRadius: 10, padding: "8px 12px", fontSize: 12, color: t.indigo, gap: 6 }}>
-          <span aria-hidden>↗</span>
-          <span className="truncate">{link.hostname.replace(/^www\./, "")}<span style={{ color: t.ink(0.4) }}>{link.pathname !== "/" && link.pathname}</span></span>
-        </a>
-      )}
-      <Actions postId={post.id} likes={post.likes_count ?? 0} comments={0} extra="↗ Partager" />
-    </article>
+        )}
+      </div>
+      <p className="mt-1.5 truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text, fontFamily: UI }}>{bookTitle}</p>
+      {author && <p className="truncate" style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>{author}</p>}
+    </div>
   );
+
+  return link ? (
+    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>
+      {content}
+    </a>
+  ) : content;
 }
 
-function SkeletonCard({ t }: { t: typeof LIGHT }) {
-  const bar = (width: string, height = 10): CSSProperties => ({ width, height, background: t.surface, borderRadius: 8 });
-  const card: CSSProperties = { background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 18, border: "none" };
-  return (
-    <div aria-hidden className="animate-pulse" style={card}>
-      <div className="flex items-center gap-2">
-        <span style={{ width: 30, height: 30, background: t.surface, borderRadius: "50%" }} />
-        <span style={bar("160px")} />
+/** Article card in the shelf */
+function ArticleShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
+  const link = safeUrl(post.url);
+  const og = useOgPreview(post.url);
+  const ogImage = og?.image ?? null;
+  const siteName = og?.siteName ?? og?.domain ?? null;
+  const ogTitle = og?.title ?? null;
+  const displayTitle = ogTitle ?? post.content.slice(0, 90);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const card = (
+    <div className="shelf-item" style={{ width: 200, flexShrink: 0 }}>
+      <div
+        className="flex flex-col overflow-hidden"
+        style={{
+          width: 200, height: 162, borderRadius: 8,
+          background: t.surface,
+          border: `1px solid ${t.line}`,
+        }}
+      >
+        {ogImage && !imgFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={ogImage} alt="" loading="lazy"
+            style={{ width: "100%", height: 80, objectFit: "cover", display: "block" }}
+            onError={() => setImgFailed(true)} />
+        ) : null}
+        <div style={{ padding: "10px 14px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            {siteName && (
+              <p style={{ fontSize: 10, color: t.muted, fontFamily: MONO, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {siteName}
+              </p>
+            )}
+            <p style={{
+              fontSize: 13, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.35,
+              display: "-webkit-box", WebkitLineClamp: ogImage ? 2 : 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden",
+            }}>
+              {displayTitle}
+            </p>
+          </div>
+          {post.category && (
+            <p style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>{post.category}</p>
+          )}
+        </div>
       </div>
-      <div className="mt-4" style={bar("100%", 12)} />
-      <div className="mt-2" style={bar("80%", 12)} />
-      <div className="mt-2" style={bar("40%", 12)} />
+    </div>
+  );
+
+  return link ? (
+    <a href={link.href} target="_blank" rel="noopener noreferrer" className="block" style={{ color: "inherit", textDecoration: "none" }}>
+      {card}
+    </a>
+  ) : card;
+}
+
+/** Quote / reflexion card in the shelf */
+function QuoteShelfItem({ post, t }: { post: Post; t: typeof LIGHT }) {
+  return (
+    <div className="shelf-item" style={{ width: 200, flexShrink: 0 }}>
+      <div
+        className="flex items-start"
+        style={{
+          width: 200, minHeight: 162, borderRadius: 8,
+          background: t.surface,
+          padding: 16,
+          border: `1px solid ${t.line}`,
+        }}
+      >
+        <p style={{
+          fontSize: 15, color: t.text, fontFamily: READING,
+          fontWeight: 400, lineHeight: 1.55, fontStyle: "italic",
+          display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical" as const, overflow: "hidden",
+        }}>
+          « {post.content.slice(0, 200)} »
+        </p>
+      </div>
+      {post.category && (
+        <p className="mt-1.5" style={{ fontSize: 10, color: t.muted, fontFamily: UI }}>
+          {post.category}
+        </p>
+      )}
     </div>
   );
 }
 
+// ── Shelf row for one person ──────────────────────────────────────────────
+function PersonShelf({ shelf, t }: { shelf: ShelfGroup; t: typeof LIGHT }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const count = shelf.posts.length;
+  const subtitle = shelf.isListening
+    ? "écoute en ce moment"
+    : `${count} ${count > 1 ? "partages" : "partage"} récent${count > 1 ? "s" : ""}`;
+  const tone = avatarTones[(shelf.userId.charCodeAt(0) + shelf.userId.charCodeAt(1)) % avatarTones.length];
+
+  return (
+    <section style={{ marginBottom: 36 }}>
+      {/* Person header */}
+      <div className="flex items-center justify-between" style={{ marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${t.line}` }}>
+        <Link href={`/profile?id=${shelf.userId}`} className="flex items-center" style={{ gap: 10, textDecoration: "none" }}>
+          <Avatar initials={getInitials(shelf.name, shelf.username)} size={32} {...tone} />
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em", lineHeight: 1 }}>
+              {shelf.name.split(" ")[0]}
+            </h2>
+            <span style={{ fontSize: 12, color: t.muted, fontFamily: UI }}>
+              {subtitle}
+              {shelf.isListening && <span style={{ marginLeft: 6, color: "#16A34A" }}>●</span>}
+            </span>
+          </div>
+        </Link>
+        <Link
+          href={`/profile?id=${shelf.userId}`}
+          style={{ fontSize: 12, color: t.primary, fontFamily: UI, textDecoration: "none" }}
+        >
+          Voir l&apos;étagère →
+        </Link>
+      </div>
+
+      {/* Horizontal scroll */}
+      <div
+        ref={scrollRef}
+        className="shelf-scroll flex overflow-x-auto"
+        style={{ gap: 14, paddingBottom: 4 }}
+      >
+        {shelf.posts.map((post) => {
+          if (post.type === "musique") return <MusicShelfItem key={post.id} post={post} t={t} />;
+          if (post.type === "livre") return <BookShelfItem key={post.id} post={post} t={t} />;
+          if (post.type === "reflexion") return <QuoteShelfItem key={post.id} post={post} t={t} />;
+          return <ArticleShelfItem key={post.id} post={post} t={t} />;
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ── "Personne à suivre ?" card ────────────────────────────────────────────
+function FollowCard({ t, userId }: { t: typeof LIGHT; userId: string | undefined }) {
+  const [suggestions, setSuggestions] = useState<PublicProfile[]>([]);
+  const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    getSuggested(userId, 4).then((results) => {
+      if (!cancelled) setSuggestions(results);
+    });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const handleFollow = async (targetId: string) => {
+    if (!userId) return;
+    const ok = await followUser(userId, targetId);
+    if (ok) setFollowedSet((prev) => new Set(prev).add(targetId));
+  };
+
+  return (
+    <div style={{
+      background: t.surface,
+      borderRadius: 12,
+      padding: 24,
+      border: `1px solid ${t.line}`,
+    }}>
+      <h3 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em" }}>
+        Personne à suivre ?
+      </h3>
+      <p className="mt-2" style={{ fontSize: 13, color: t.muted, fontFamily: UI, lineHeight: 1.5 }}>
+        Découvre des profils et remplis ton étagère.
+      </p>
+
+      {suggestions.length > 0 && (
+        <div className="mt-5 flex flex-col" style={{ gap: 10 }}>
+          {suggestions.map((s) => {
+            const displayName = s.name ?? s.username;
+            const tone = avatarTones[(s.id.charCodeAt(0) + (s.id.charCodeAt(1) || 0)) % avatarTones.length];
+            const followed = followedSet.has(s.id);
+            return (
+              <div key={s.id} className="flex items-center" style={{ gap: 10 }}>
+                <Avatar initials={getInitials(s.name, s.username)} size={32} {...tone} />
+                <span style={{ fontSize: 13, color: t.text, fontFamily: UI, flex: 1 }}>{displayName}</span>
+                {followed ? (
+                  <span style={{ fontSize: 11, color: t.muted, fontFamily: UI }}>Suivi ✓</span>
+                ) : (
+                  <button type="button" onClick={() => handleFollow(s.id)}
+                    style={{ fontSize: 11, color: t.primary, background: "none", border: `1px solid ${t.line}`, borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontFamily: UI }}>
+                    Suivre
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-5">
+        <Link href="/explore"
+          style={{
+            fontSize: 13, fontWeight: 500, fontFamily: UI,
+            color: t.primary, textDecoration: "none",
+          }}>
+          Explorer les profils →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────
+function EmptyState({ onNewPost, t, userId }: { onNewPost: () => void; t: typeof LIGHT; userId: string | undefined }) {
+  return (
+    <div className="grid gap-10 md:grid-cols-[2fr_1fr]" style={{ marginTop: 32 }}>
+      <div>
+        <h1 style={{ fontSize: 30, fontWeight: 800, color: t.text, fontFamily: DISPLAY, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+          Ton étagère est vide pour l&apos;instant.
+        </h1>
+        <p className="mt-3" style={{ fontSize: 15, color: t.muted, fontFamily: UI, lineHeight: 1.6, maxWidth: 460 }}>
+          Partage un morceau, un article, le livre sur ta table de nuit. Tes amis voient ton étagère, tu vois la leur.
+        </p>
+        <div className="mt-6 flex flex-wrap" style={{ gap: 10 }}>
+          <button type="button" onClick={onNewPost}
+            style={{ background: t.primary, color: t.onPrimary, fontSize: 14, fontWeight: 500, fontFamily: UI, padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer" }}>
+            Créer mon étagère
+          </button>
+          <Link href="/explore"
+            style={{ fontSize: 14, fontFamily: UI, color: t.text, padding: "12px 24px", borderRadius: 8, border: `1px solid ${t.line}`, textDecoration: "none" }}>
+            Explorer
+          </Link>
+        </div>
+      </div>
+      <FollowCard t={t} userId={userId} />
+    </div>
+  );
+}
+
+// ── Compose modal ─────────────────────────────────────────────────────────
 function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: () => void; onCreated: () => void; t: typeof LIGHT }) {
-  const [type, setType] = useState<PostType>("article");
+  const [type, setType] = useState<PostType>("musique");
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [musicUrl, setMusicUrl] = useState("");
   const [musicEmbed, setMusicEmbed] = useState<MusicEmbed | null>(null);
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicError, setMusicError] = useState(false);
   const [lookedUp, setLookedUp] = useState("");
-  // OG preview for article URL
   const ogPreview = useOgPreview(type === "article" && url.trim() ? url.trim() : null);
 
   const lookUpMusic = async (value: string) => {
@@ -738,11 +538,11 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
     event.preventDefault();
     setError(null);
     if (type === "musique" && !musicEmbed) { setError("Ajoute un lien Spotify, Apple Music, Deezer, SoundCloud ou YouTube reconnu."); return; }
-    const trimmedUrl = type === "article" ? url.trim() : type === "musique" ? musicUrl.trim() : "";
+    const trimmedUrl = (type === "article" || type === "musique") ? url.trim() : "";
     if (trimmedUrl && !safeUrl(trimmedUrl)) { setError("Le lien doit commencer par http:// ou https://"); return; }
     setSubmitting(true);
     const profileError = await ensureProfile(user);
-    if (profileError) { setError(`Ton profil n’a pas pu être créé : ${profileError}`); setSubmitting(false); return; }
+    if (profileError) { setError(`Ton profil n'a pas pu être créé : ${profileError}`); setSubmitting(false); return; }
     const post: Record<string, unknown> = { user_id: user.id, type, content: content.trim() || (type === "musique" && musicEmbed ? musicEmbed.title : ""), url: trimmedUrl || null, category };
     let { error: insertError } = await supabase.from("posts").insert(type === "musique" ? { ...post, metadata: musicEmbed } : post);
     if (insertError && type === "musique" && /metadata/i.test(insertError.message)) {
@@ -752,23 +552,28 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
     onCreated();
   };
 
-  const field: CSSProperties = { background: t.cream, border: `1px solid ${t.black(0.08)}`, borderRadius: 10, color: t.text, outline: "none", width: "100%" };
+  const field: CSSProperties = { background: t.ground, border: `1px solid ${t.line}`, borderRadius: 8, color: t.text, outline: "none", width: "100%", fontFamily: UI };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center px-5"
-      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} onClick={onClose}>
-      <form role="dialog" aria-modal="true" aria-labelledby="new-post-title" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}
-        className="w-full" style={{ maxWidth: 520, background: t.white, borderRadius: 20, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div className="flex items-center">
-          <h2 id="new-post-title" style={{ fontSize: 16, fontWeight: 600, color: t.text }}>Nouveau post</h2>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="db-play ml-auto" style={{ fontSize: 18 }}>✕</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)" }} onClick={onClose}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}
+        className="w-full" style={{ maxWidth: 500, background: t.surface, borderRadius: 14, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div className="flex items-center justify-between">
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY }}>Nouveau post</h2>
+          <button type="button" onClick={onClose} style={{ fontSize: 18, color: t.muted, background: "none", border: "none", cursor: "pointer" }}>✕</button>
         </div>
 
-        <div className="mt-4 flex flex-wrap" style={{ gap: 8 }}>
+        <div className="mt-4 flex" style={{ gap: 6 }}>
           {postTypes.map((item) => (
-            <button key={item.value} type="button" aria-pressed={type === item.value} onClick={() => setType(item.value)}
-              className={type === item.value ? "" : "db-chip"}
-              style={{ fontSize: 12, padding: "6px 16px", borderRadius: 20, ...(type === item.value ? { background: t.indigo, color: LIGHT.cream } : {}) }}>
+            <button key={item.value} type="button" onClick={() => setType(item.value)}
+              style={{
+                fontSize: 12, padding: "6px 14px", borderRadius: 6, cursor: "pointer",
+                fontFamily: UI, border: "none",
+                ...(type === item.value
+                  ? { background: t.primary, color: t.onPrimary }
+                  : { background: t.ground, color: t.muted }),
+              }}>
               {item.label}
             </button>
           ))}
@@ -776,19 +581,18 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
 
         {type === "article" && (
           <>
-            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Coller une URL..." aria-label="URL de l'article"
-              className="db-input mt-3" style={{ ...field, padding: "10px 14px", fontSize: 12 }} />
-            {/* OG preview in modal */}
-            {ogPreview && ogPreview.title && (
-              <div className="mt-2 flex items-center gap-3" style={{ background: t.cream, borderRadius: 10, padding: 10 }}>
+            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)}
+              placeholder="URL de l'article" className="mt-3 block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
+            {ogPreview?.title && (
+              <div className="mt-2 flex items-center gap-3" style={{ background: t.ground, borderRadius: 8, padding: 10 }}>
                 {ogPreview.image && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={ogPreview.image} alt="" style={{ width: 60, height: 44, borderRadius: 6, objectFit: "cover" }}
+                  <img src={ogPreview.image} alt="" style={{ width: 60, height: 44, borderRadius: 4, objectFit: "cover" }}
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{ogPreview.title}</p>
-                  <p className="truncate" style={{ fontSize: 10, color: t.ink(0.4) }}>{ogPreview.domain}</p>
+                  <p className="truncate" style={{ fontSize: 10, color: t.muted }}>{ogPreview.domain}</p>
                 </div>
               </div>
             )}
@@ -797,54 +601,74 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
 
         {type === "musique" && (
           <div className="mt-3">
-            <input type="url" value={musicUrl} onChange={(e) => { setMusicUrl(e.target.value); if (e.target.value.trim() !== lookedUp) { setMusicEmbed(null); setMusicError(false); } }}
+            <input type="url" value={url} onChange={(e) => { setUrl(e.target.value); if (e.target.value.trim() !== lookedUp) { setMusicEmbed(null); setMusicError(false); } }}
               onBlur={(e) => lookUpMusic(e.currentTarget.value)}
-              placeholder="Colle un lien Spotify, Apple Music, Deezer ou YouTube" aria-label="Lien de la musique"
-              className="db-input" style={{ ...field, padding: "10px 14px", fontSize: 12 }} />
-            <p className="mt-1.5" style={{ fontSize: 10, color: t.ink(0.4) }}>{"\u{1F7E2}"} Spotify · {"\u{1F534}"} Apple Music · {"\u{1F7E0}"} Deezer · {"\u{1F534}"} YouTube</p>
-            {musicLoading && <p className="mt-2" style={{ fontSize: 11, color: t.ink(0.4) }}>Recherche du morceau…</p>}
+              placeholder="Lien Spotify, Apple Music, Deezer, YouTube..."
+              className="block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
+            {musicLoading && <p className="mt-2" style={{ fontSize: 11, color: t.muted }}>Recherche…</p>}
             {musicEmbed && !musicLoading && (
               <div className="mt-2">
-                <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>✓ Musique trouvée</p>
-                <SharedMusicCard embed={musicEmbed} href={musicUrl.trim()} />
+                <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>✓ Trouvé</p>
+                <SharedMusicCard embed={musicEmbed} href={url.trim()} />
               </div>
             )}
             {musicError && !musicLoading && (
-              <p role="alert" className="mt-2" style={{ fontSize: 11, color: "#DC2626" }}>
-                ❌ Lien non reconnu — essaie un lien Spotify, Apple Music, Deezer ou YouTube
-              </p>
+              <p className="mt-2" style={{ fontSize: 11, color: "#DC2626" }}>Lien non reconnu</p>
             )}
           </div>
         )}
-        <textarea value={content} onChange={(e) => setContent(e.target.value)}
-          placeholder={type === "musique" ? "Dis-nous pourquoi tu partages ça..." : "Ajouter un commentaire..."}
-          aria-label="Commentaire" rows={4} autoFocus className="db-input mt-3 block resize-none"
-          style={{ ...field, padding: "12px 14px", fontSize: 13, lineHeight: 1.5 }} />
 
-        <p className="mb-2 mt-3" style={{ fontSize: 11, color: t.ink(0.4) }}>Catégorie</p>
-        <div className="flex flex-wrap" style={{ gap: 6 }}>
-          {categories.map((item) => {
-            const isActive = category === item.label;
-            return (
-              <button key={item.label} type="button" aria-pressed={isActive} onClick={() => setCategory(isActive ? null : item.label)}
-                className={isActive ? "" : "db-chip"} style={{ fontSize: 11, padding: "4px 12px", borderRadius: 20, ...(isActive ? tones[item.tone] : {}) }}>
-                {item.label}
-              </button>
-            );
-          })}
+        <textarea value={content} onChange={(e) => setContent(e.target.value)}
+          placeholder={type === "reflexion" ? "Ta réflexion..." : "Un commentaire..."}
+          rows={3} className="mt-3 block resize-none" style={{ ...field, padding: "12px 14px", fontSize: 14, lineHeight: 1.5, fontFamily: type === "reflexion" ? READING : UI }} />
+
+        <div className="mt-3 flex flex-wrap" style={{ gap: 5 }}>
+          {categoryList.map((cat) => (
+            <button key={cat} type="button" onClick={() => setCategory(category === cat ? null : cat)}
+              style={{
+                fontSize: 11, padding: "3px 10px", borderRadius: 4, cursor: "pointer",
+                fontFamily: UI, border: `1px solid ${t.line}`,
+                ...(category === cat ? { background: t.primary, color: t.onPrimary, borderColor: t.primary } : { background: "transparent", color: t.muted }),
+              }}>
+              {cat}
+            </button>
+          ))}
         </div>
 
-        {error && <p role="alert" className="mt-3" style={{ fontSize: 12, color: "#C0392B" }}>{error}</p>}
+        {error && <p className="mt-3" style={{ fontSize: 12, color: "#B4302F" }}>{error}</p>}
 
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <p style={{ fontSize: 11, color: t.ink(0.4) }}>Visible par tes abonnés</p>
-          <button type="submit" disabled={(type === "musique" ? !musicEmbed : content.trim() === "") || submitting}
-            className="db-fab disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ color: LIGHT.cream, fontSize: 13, fontWeight: 500, padding: "10px 24px", borderRadius: 20 }}>
+        <div className="mt-4 flex justify-end">
+          <button type="submit" disabled={(type === "musique" ? !musicEmbed : !content.trim()) || submitting}
+            style={{
+              background: t.primary, color: t.onPrimary,
+              fontSize: 13, fontWeight: 500, fontFamily: UI,
+              padding: "10px 24px", borderRadius: 8, border: "none", cursor: "pointer",
+              opacity: submitting ? 0.6 : 1,
+            }}>
             {submitting ? "Publication…" : "Publier"}
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ── Loading skeleton ──────────────────────────────────────────────────────
+function ShelfSkeleton({ t }: { t: typeof LIGHT }) {
+  return (
+    <div className="animate-pulse" style={{ marginBottom: 36 }}>
+      <div className="flex items-center" style={{ gap: 10, marginBottom: 12 }}>
+        <div style={{ width: 32, height: 32, background: t.surface, borderRadius: "50%" }} />
+        <div>
+          <div style={{ width: 100, height: 16, background: t.surface, borderRadius: 4 }} />
+          <div className="mt-1" style={{ width: 140, height: 12, background: t.surface, borderRadius: 4 }} />
+        </div>
+      </div>
+      <div className="flex" style={{ gap: 14 }}>
+        {[0, 1, 2, 3, 4].map((j) => (
+          <div key={j} style={{ width: 148, height: 148, background: t.surface, borderRadius: 8, flexShrink: 0 }} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -858,58 +682,21 @@ export default function Dashboard() {
   const t = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("Tout");
   const [modalOpen, setModalOpen] = useState(false);
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [mine, setMine] = useState<Record<string, MyInteractions>>({});
-  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
-  const [customizerOpen, setCustomizerOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [utilityOpen, setUtilityOpen] = useState(false);
   const [following, setFollowing] = useState<PublicProfile[]>([]);
-  const [podcastSubCount, setPodcastSubCount] = useState(0);
 
-  // Dynamic CSS that uses theme tokens
   const css = `
-.db-hover:hover { background: ${t.black(0.04)}; }
-.db-action:hover { background: ${t.black(0.05)}; }
-.db-pill { background: ${t.black(0.05)}; color: ${t.ink(0.5)}; }
-.db-pill:hover { background: ${t.black(0.08)}; }
-.db-chip { background: ${t.surface}; color: ${t.ink(0.5)}; }
-.db-chip:hover { background: ${t === DARK ? "#243059" : "#EAE3D6"}; }
-.db-space { background: ${t.surface}; transition: background-color 0.15s; }
-.db-space:hover { background: ${t === DARK ? "#243059" : "#EAE3D6"}; }
-.db-option { background: ${t.white}; }
-.db-option:hover { background: ${t.black(0.03)}; }
-.db-fab { background: ${t === DARK ? "#7B8CDE" : "#2A3560"}; }
-.db-fab:hover { background: ${t === DARK ? "#9BA8E8" : "#3D4F8C"}; }
-.db-play { color: ${t.ink(0.4)}; }
-.db-play:hover { color: ${t.text}; }
-.db-input::placeholder { color: ${t.ink(0.4)}; }
-.db-noscrollbar { scrollbar-width: none; }
-.db-noscrollbar::-webkit-scrollbar { display: none; }
-.db-card-social { transition: box-shadow 0.2s ease, transform 0.15s ease; }
-.db-card-social:hover { box-shadow: ${t.hoverShadow}; transform: translateY(-1px); }
-.db-story-ring { background: ${ACCENT_GRADIENT}; }
-.db-compose:focus-within { box-shadow: 0 0 0 2px rgba(42,53,96,0.15); }
-.db-trending:hover { background: ${t === DARK ? "rgba(123,140,222,0.08)" : "rgba(42,53,96,0.06)"}; }
-${socialCss}
-${socialCardsCss}
-`;
-
-  useEffect(() => {
-    if (!sidebarOpen && !utilityOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setSidebarOpen(false); setUtilityOpen(false); } };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [sidebarOpen, utilityOpen]);
-
-  useEffect(() => {
-    const local = readLocalPreferences();
-    if (local) setPreferences(local);
-  }, []);
+    @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Literata:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400&display=swap');
+    .shelf-scroll { scrollbar-width: none; }
+    .shelf-scroll::-webkit-scrollbar { display: none; }
+    .shelf-item { transition: transform 0.15s ease; }
+    .shelf-item:hover { transform: translateY(-2px); }
+    ${socialCss}
+  `;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -946,7 +733,7 @@ ${socialCardsCss}
         .from("posts").select(POST_SELECT)
         .not("content", "ilike", "%Morceau actuel%")
         .not("content", "ilike", "%Test du Raccourci%")
-        .order("created_at", { ascending: false }).limit(20);
+        .order("created_at", { ascending: false }).limit(40);
       if (error) { setFeedError(error.message); return; }
       loaded = data as Post[];
     }
@@ -973,13 +760,10 @@ ${socialCardsCss}
     (async () => {
       const error = user ? await ensureProfile(user) : null;
       if (cancelled) return;
-      setProfileError(error);
       // Accounts confirmed by email reach the dashboard first: record their referral here.
       if (!error) void claimReferral(userId);
       const { data } = await supabase.from("profiles").select("name, username, location").eq("id", userId).maybeSingle();
       if (!cancelled) setProfile(data);
-      const remote = await readRemotePreferences(userId);
-      if (!cancelled && remote) setPreferences(remote);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -992,338 +776,162 @@ ${socialCardsCss}
     return () => { cancelled = true; };
   }, [userId]);
 
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    getUserPodcastSubscriptions(userId).then((list) => { if (!cancelled) setPodcastSubCount(list.length); });
-    return () => { cancelled = true; };
-  }, [userId]);
-
   const closeModal = useCallback(() => setModalOpen(false), []);
 
-  const handleSavePreferences = async (next: Preferences) => {
-    setPreferences(next);
-    const savedOnline = userId ? await savePreferences(userId, next) : false;
-    return savedOnline ? "Préférences enregistrées." : "Enregistrées sur cet appareil seulement : la sauvegarde sur ton profil a échoué.";
-  };
+  // Group posts into shelves
+  const shelves = useMemo(() => posts ? groupIntoShelves(posts) : [], [posts]);
 
-  if (!session) return <div className="page-enter min-h-screen" style={{ background: t.cream }} />;
+  if (!session) return <div className="min-h-screen" style={{ background: t.ground }} />;
 
   const email = session.user.email;
-  const displayName = profile?.name ?? email?.split("@")[0] ?? "";
-  const username = profile?.username ?? email?.split("@")[0] ?? "";
   const initials = getInitials(profile?.name ?? null, email);
-
-  type FeedItem = { key: string; tags: string[]; node: ReactNode };
-  const on = (moduleId: ModuleId) => preferences.modules[moduleId];
-  const typeModule: Partial<Record<PostType, ModuleId>> = { musique: "musique", livre: "livres" };
-
-  const postItems: FeedItem[] = (posts ?? [])
-    .filter((post) => { const m = typeModule[post.type]; return !m || on(m); })
-    .map((post) => ({ key: post.id, tags: postTags(post), node: <PostCard post={post} t={t} /> }));
-  if (postItems.length === 0) {
-    postItems.push({ key: "welcome", tags: [], node: <WelcomeCard onNewPost={() => setModalOpen(true)} t={t} /> });
-  }
-
-  const moduleItems: Record<string, FeedItem[]> = {};
-  if (on("musique")) (moduleItems["musique"] ??= []).push({ key: "listening", tags: ["Musique"], node: <NowListeningCard /> });
-  if (on("livres")) (moduleItems["livres"] ??= []).push({ key: "reading", tags: ["Livres"], node: <ReadingNowCard /> });
-  if (on("reactions")) (moduleItems["reactions"] ??= []).push({ key: "discussions", tags: [], node: <DiscussionsCard /> });
-
-  const sortedModuleItems: FeedItem[] = preferences.moduleOrder.flatMap((id) => moduleItems[id] ?? []);
-  const discoveryItems: FeedItem[] = [];
-
-  const interleave = (first: FeedItem[], second: FeedItem[]) =>
-    Array.from({ length: Math.max(first.length, second.length) }, (_, i) => [first[i], second[i]]).flat().filter((item): item is FeedItem => Boolean(item));
-
-  const feedItems = preferences.order === "social" ? [...postItems, ...sortedModuleItems, ...discoveryItems]
-    : [...interleave(postItems, sortedModuleItems), ...discoveryItems];
-  const isVisible = (tags: string[]) => filter === "Tout" || tags.includes(filter);
-  const hasVisibleItem = feedItems.some((item) => isVisible(item.tags));
+  const hasPosts = (posts?.length ?? 0) > 0;
 
   return (
     <SocialContext.Provider value={{ user: session.user, viewerName: profile?.name ?? null, mine }}>
-    <div className="flex h-screen flex-col" style={{ background: t.cream, color: t.text, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
-      <style>{css}</style>
-      <Navbar />
+      <div className="min-h-screen" style={{ background: t.ground, color: t.text, fontFamily: UI }}>
+        <style>{css}</style>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[260px_1fr_300px]">
-        {sidebarOpen && <div aria-hidden className="fixed inset-0 z-40 md:hidden" style={{ background: "rgba(28,26,21,0.35)" }} onClick={() => setSidebarOpen(false)} />}
-        <aside
-          id="db-sidebar"
-          className={`${sidebarOpen ? "fixed inset-y-0 left-0 z-50 block w-[280px] max-w-[85vw] shadow-xl" : "hidden"} overflow-y-auto md:static md:z-auto md:block md:w-auto md:max-w-none md:shadow-none`}
-          style={{ background: t.white, borderRight: `1px solid ${t.black(0.07)}`, padding: "20px 16px" }}
-          onClick={(e) => { if ((e.target as HTMLElement).closest("a, button")) setSidebarOpen(false); }}>
-          <button type="button" aria-label="Fermer le menu" className="db-hover mb-3 ml-auto flex md:hidden" style={{ borderRadius: 8, padding: "2px 8px", fontSize: 18, color: t.ink(0.5) }}>✕</button>
-          <div style={{ background: t.white, borderRadius: 16, overflow: "hidden", boxShadow: t.warmShadow }}>
-            <div style={{ height: 48, background: ACCENT_GRADIENT }} />
-            <div style={{ padding: "0 14px 14px", marginTop: -24 }}>
-              <Avatar initials={initials} size={48} background={t.indigo} color={t.cream} />
-              <p className="mt-2 truncate" style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{displayName}</p>
-              <p className="truncate" style={{ fontSize: 11, color: t.ink(0.4) }}>@{username}{profile?.location && ` · ${profile.location}`}</p>
-              <Link href="/profile" className="db-hover mt-2 block w-full text-center"
-                style={{ border: `1px solid ${t.black(0.08)}`, borderRadius: 8, fontSize: 11, padding: "5px 10px", color: t.ink(0.5) }}>
-                Voir mon profil
+        {/* ── Top nav ──────────────────────────────────────────────── */}
+        <header className="sticky top-0 z-30" style={{ background: t.ground, borderBottom: `1px solid ${t.line}` }}>
+          <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1080, padding: "12px 20px" }}>
+            <div className="flex items-center" style={{ gap: 24 }}>
+              <Link href="/dashboard" style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY, textDecoration: "none", letterSpacing: "-0.02em" }}>
+                boredboard
+              </Link>
+              <nav className="hidden items-center sm:flex" style={{ gap: 20 }}>
+                <Link href="/dashboard" style={{ fontSize: 13, fontWeight: 500, color: t.text, fontFamily: UI, textDecoration: "none" }}>
+                  Board
+                </Link>
+                <Link href="/explore" style={{ fontSize: 13, color: t.muted, fontFamily: UI, textDecoration: "none" }}>
+                  Explorer
+                </Link>
+              </nav>
+            </div>
+            <div className="flex items-center" style={{ gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                style={{
+                  background: t.primary, color: t.onPrimary,
+                  fontSize: 13, fontWeight: 500, fontFamily: UI,
+                  padding: "8px 18px", borderRadius: 8, border: "none", cursor: "pointer",
+                }}
+              >
+                + Partager
+              </button>
+              <Link
+                href="/profile"
+                className="flex shrink-0 items-center justify-center"
+                style={{
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: t.primary, color: t.onPrimary,
+                  fontSize: 12, fontWeight: 500, textDecoration: "none", fontFamily: UI,
+                }}
+              >
+                {initials}
               </Link>
             </div>
           </div>
-          <Divider t={t} />
-          <nav className="flex flex-col" style={{ gap: 2 }}>
-            {navItems.map((item) => {
-              const isActive = item.filter === filter;
-              const style: CSSProperties = { padding: "8px 12px", borderRadius: 10, fontSize: 13, gap: 10, color: isActive ? t.text : t.ink(0.5), fontWeight: isActive ? 500 : 400, ...(isActive ? { background: t.surface } : {}) };
-              const className = `flex items-center text-left ${isActive ? "" : "db-hover"}`;
-              const content = <><span aria-hidden>{item.icon}</span>{item.label}</>;
-              return item.href ? (
-                <Link key={item.label} href={item.href} className={className} style={style}>{content}</Link>
-              ) : (
-                <button key={item.label} type="button" onClick={() => item.filter && setFilter(item.filter)} aria-current={isActive ? "page" : undefined} className={className} style={style}>{content}</button>
-              );
-            })}
-          </nav>
-          <Divider t={t} />
-          <SectionLabel t={t}>Abonnements</SectionLabel>
-          {following.length > 0 ? (
-            <div className="flex flex-col" style={{ gap: 6 }}>
-              {following.slice(0, 6).map((u) => {
-                const tone = avatarTones[(u.id.charCodeAt(0) + u.id.charCodeAt(1)) % avatarTones.length];
-                return (
-                  <Link key={u.id} href={`/profile?id=${u.id}`} className="db-hover flex items-center" style={{ gap: 8, padding: "4px 8px", borderRadius: 8 }}>
-                    <Avatar initials={getInitials(u.name, u.username)} size={26} {...tone} />
-                    <span className="min-w-0 truncate" style={{ fontSize: 12, color: t.text }}>{u.name ?? u.username}</span>
-                  </Link>
-                );
-              })}
-              {following.length > 6 && <Link href="/explore" style={{ fontSize: 11, color: t.indigo, padding: "2px 8px" }}>Voir tous ({following.length}) →</Link>}
+        </header>
+
+        {/* ── Main content ─────────────────────────────────────────── */}
+        <main className="mx-auto" style={{ maxWidth: 1080, padding: "32px 20px 96px" }}>
+          {feedError ? (
+            <div className="text-center" style={{ padding: "60px 20px" }}>
+              <p style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: UI }}>Impossible de charger le feed</p>
+              <p className="mt-2" style={{ fontSize: 12, color: "#B4302F", fontFamily: UI }}>{feedError}</p>
+              <button type="button" onClick={loadPosts} className="mt-4"
+                style={{ fontSize: 12, padding: "8px 20px", borderRadius: 6, border: `1px solid ${t.line}`, color: t.muted, background: "none", cursor: "pointer", fontFamily: UI }}>
+                Réessayer
+              </button>
             </div>
+          ) : posts === null ? (
+            /* Loading skeleton */
+            <div>
+              <ShelfSkeleton t={t} />
+              <ShelfSkeleton t={t} />
+              <ShelfSkeleton t={t} />
+            </div>
+          ) : !hasPosts ? (
+            <EmptyState onNewPost={() => setModalOpen(true)} t={t} userId={userId} />
           ) : (
-            <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}><Link href="/explore" style={{ color: t.indigo }}>Découvre des profils</Link> à suivre.</p>
+            /* Shelves + right column */
+            <div className="grid gap-0 md:grid-cols-[1fr_260px] md:gap-12">
+              <div>
+                {shelves.map((shelf) => (
+                  <PersonShelf key={shelf.userId} shelf={shelf} t={t} />
+                ))}
+              </div>
+
+              {/* Right column */}
+              <aside className="hidden md:block" style={{ paddingTop: 4 }}>
+                <div className="sticky" style={{ top: 76 }}>
+                  <FollowCard t={t} userId={userId} />
+
+                  {/* Following list */}
+                  {following.length > 0 && (
+                    <div className="mt-6" style={{ padding: "0 4px" }}>
+                      <p style={{ fontSize: 10, color: t.muted, fontFamily: UI, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
+                        Abonnements
+                      </p>
+                      <div className="flex flex-col" style={{ gap: 6 }}>
+                        {following.slice(0, 8).map((u) => {
+                          const tone = avatarTones[(u.id.charCodeAt(0) + u.id.charCodeAt(1)) % avatarTones.length];
+                          return (
+                            <Link key={u.id} href={`/profile?id=${u.id}`} className="flex items-center" style={{ gap: 8, textDecoration: "none" }}>
+                              <Avatar initials={getInitials(u.name, u.username)} size={24} {...tone} />
+                              <span className="min-w-0 truncate" style={{ fontSize: 12, color: t.text, fontFamily: UI }}>{u.name ?? u.username}</span>
+                            </Link>
+                          );
+                        })}
+                        {following.length > 8 && (
+                          <Link href="/explore" style={{ fontSize: 11, color: t.primary, fontFamily: UI, textDecoration: "none" }}>
+                            Voir tous ({following.length}) →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quick links */}
+                  <div className="mt-6 flex flex-wrap" style={{ gap: 8 }}>
+                    {[
+                      { label: "Livres", href: "/livres" },
+                      { label: "Podcasts", href: "/podcasts" },
+                      { label: "Newsletters", href: "/newsletter" },
+                      { label: "Réglages", href: "/settings" },
+                    ].map((link) => (
+                      <Link key={link.label} href={link.href}
+                        style={{
+                          fontSize: 11, color: t.muted, fontFamily: UI,
+                          padding: "4px 10px", borderRadius: 4,
+                          border: `1px solid ${t.line}`, textDecoration: "none",
+                        }}>
+                        {link.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </aside>
+            </div>
           )}
-          <Divider t={t} />
-          <SectionLabel t={t}>Qui est en ligne</SectionLabel>
-          <p style={{ fontSize: 11, color: t.ink(0.4), lineHeight: 1.5 }}>{following.length > 0 ? "Aucun abonné en ligne pour le moment." : "Suis des profils pour voir leur activité ici."}</p>
-          <Divider t={t} />
-          <SectionLabel t={t}>Mes espaces</SectionLabel>
-          <div className="grid grid-cols-2" style={{ gap: 6 }}>
-            {spaces.map((space) => {
-              const content = <><span aria-hidden style={{ fontSize: 16 }}>{space.icon}</span><span className="mt-1 block" style={{ fontSize: 11, fontWeight: 500, color: t.text }}>{space.title}</span><span className="block" style={{ fontSize: 10, color: t.ink(0.4) }}>{space.detail}</span></>;
-              const style: CSSProperties = { borderRadius: 10, padding: 10 };
-              return space.href ? (
-                <Link key={space.title} href={space.href} className="db-space block" style={style}>{content}</Link>
-              ) : (
-                <button key={space.title} type="button" onClick={() => space.filter && setFilter(space.filter)} className="db-space text-left" style={style}>{content}</button>
-              );
-            })}
-          </div>
-        </aside>
+        </main>
 
-        {/* Feed */}
-        <div className="relative min-h-0 min-w-0">
-          <main className="mx-auto flex h-full w-full flex-col overflow-y-auto px-3 md:px-5" style={{ background: t.cream, paddingBottom: 96, gap: 12, maxWidth: 740 }}>
-            <div className="sticky top-0 z-10 mb-2 shrink-0" style={{ background: t.cream, paddingTop: 20, paddingBottom: 12, borderBottom: `1px solid ${t.black(0.06)}` }}>
-              <div className="db-noscrollbar flex overflow-x-auto" style={{ gap: 6 }}>
-                <button type="button" onClick={() => setSidebarOpen(true)} aria-label="Ouvrir le menu" aria-expanded={sidebarOpen} aria-controls="db-sidebar"
-                  className="db-hover flex shrink-0 items-center md:hidden"
-                  style={{ border: `1px solid ${t.black(0.1)}`, borderRadius: 20, padding: "3px 12px", fontSize: 16, color: t.ink(0.6) }}>☰</button>
-                {filters.map((item) => (
-                  <button key={item} type="button" onClick={() => setFilter(item)} aria-pressed={filter === item}
-                    className={`shrink-0 ${filter === item ? "" : "db-pill"}`}
-                    style={{ fontSize: 12, padding: "5px 14px", borderRadius: 20, ...(filter === item ? { background: t.indigo, color: LIGHT.cream } : {}) }}>{item}</button>
-                ))}
-                <button type="button" onClick={() => setCustomizerOpen(true)} className="db-hover ml-auto flex shrink-0 items-center"
-                  style={{ gap: 5, border: `1px solid ${t.black(0.1)}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, color: t.ink(0.5) }}>
-                  <span aria-hidden>⚙️</span> Personnaliser
-                </button>
-              </div>
-            </div>
+        {/* Mobile FAB */}
+        <button type="button" onClick={() => setModalOpen(true)} aria-label="Nouveau post"
+          className="fixed bottom-6 right-6 z-20 flex items-center justify-center md:hidden"
+          style={{
+            background: t.primary, color: t.onPrimary,
+            width: 52, height: 52, borderRadius: "50%",
+            fontSize: 24, border: "none", cursor: "pointer",
+            boxShadow: "0 4px 20px rgba(42,53,96,0.3)",
+          }}>
+          +
+        </button>
 
-            {following.length > 0 && (
-              <FadeIn>
-                <div style={{ background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: "14px 16px", border: "none", marginBottom: 4 }}>
-                  <StoriesBar following={following} posts={posts} t={t} />
-                </div>
-              </FadeIn>
-            )}
-
-            <FadeIn>
-              <ComposePrompt initials={initials} displayName={displayName} onOpen={() => setModalOpen(true)} t={t} />
-            </FadeIn>
-
-            {profileError && <p role="alert" style={{ background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: 18, border: "none", fontSize: 12, color: "#C0392B" }}>Ton profil n&apos;a pas pu être créé : {profileError}</p>}
-
-            {feedError ? (
-              <div role="alert" className="text-center" style={{ background: t.white, boxShadow: t.warmShadow, borderRadius: 16, padding: "40px 20px", border: "none" }}>
-                <p style={{ fontSize: 15, fontWeight: 500, color: t.text }}>Impossible de charger le feed</p>
-                <p className="mt-1.5" style={{ fontSize: 12, color: "#C0392B" }}>{feedError}</p>
-                <button type="button" onClick={loadPosts} className="db-hover mt-4"
-                  style={{ border: `1px solid ${t.black(0.1)}`, borderRadius: 8, fontSize: 12, padding: "6px 16px", color: t.ink(0.6) }}>Réessayer</button>
-              </div>
-            ) : posts === null ? (
-              <>
-                <span className="sr-only" role="status">Chargement du feed…</span>
-                <SkeletonCard t={t} /><SkeletonCard t={t} /><SkeletonCard t={t} />
-              </>
-            ) : (
-              <>
-                {feedItems.map((item) => (
-                  <div key={item.key} hidden={!isVisible(item.tags)} className="shrink-0">
-                    <FadeIn>{item.node}</FadeIn>
-                  </div>
-                ))}
-                {!hasVisibleItem && (
-                  <p className="text-center" style={{ border: `1px dashed ${t.black(0.12)}`, borderRadius: 14, padding: "40px 20px", fontSize: 13, color: t.ink(0.4) }}>
-                    {feedItems.length === 0 ? "Tous les modules sont désactivés : réactive-en depuis « Personnaliser »." : `Rien dans « ${filter} » pour l’instant.`}
-                  </p>
-                )}
-              </>
-            )}
-          </main>
-
-          <button type="button" onClick={() => setUtilityOpen(true)} aria-label="Ouvrir le panneau utilitaire"
-            className="db-hover absolute bottom-6 right-[72px] z-20 flex items-center justify-center md:hidden"
-            style={{ background: t.white, width: 40, height: 40, borderRadius: "50%", fontSize: 16, border: `1px solid ${t.black(0.1)}`, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>⚡</button>
-          <button type="button" onClick={() => setModalOpen(true)} aria-label="Nouveau post" title="Nouveau post"
-            className="db-fab absolute bottom-6 right-6 z-20 flex items-center justify-center"
-            style={{ color: LIGHT.cream, width: 48, height: 48, borderRadius: "50%", fontSize: 22, boxShadow: "0 4px 20px rgba(42,53,96,0.3)" }}>+</button>
-        </div>
-
-        {/* Right sidebar */}
-        <aside className="hidden overflow-y-auto md:block" style={{ background: t.white, borderLeft: `1px solid ${t.black(0.04)}`, padding: "20px 16px" }}>
-          <div className="flex items-center" style={{ gap: 6, marginBottom: 16 }}>
-            {[
-              { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
-              { icon: "\u{1F3B5}", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
-              { icon: "\u{1F4D6}", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
-            ].map((stat) => (
-              <div key={stat.label} className="flex-1 text-center" style={{ background: t.cream, borderRadius: 12, padding: "8px 4px" }}>
-                <p style={{ fontSize: 15, fontWeight: 700, color: t.text, lineHeight: 1 }}>{stat.value}</p>
-                <p style={{ fontSize: 9, color: t.ink(0.4), marginTop: 2 }}>{stat.label}</p>
-              </div>
-            ))}
-          </div>
-          <SectionLabel t={t}>{"\u{1F525}"} Tendances</SectionLabel>
-          <TrendingTopics posts={posts} t={t} />
-          <Divider t={t} />
-          <SectionLabel t={t}>Profils suggérés</SectionLabel>
-          <SuggestedProfiles t={t} />
-          <Divider t={t} />
-          <SectionLabel t={t}>Raccourcis</SectionLabel>
-          <div className="grid grid-cols-3" style={{ gap: 6 }}>
-            {[
-              { icon: "\u{1F4EC}", label: "Newsletters", href: "/newsletter" },
-              { icon: "\u{1F399}", label: "Podcasts", href: "/podcasts" },
-              { icon: "\u{1F4D6}", label: "Livres", href: "/livres" },
-              { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
-              { icon: "\u{1F4F0}", label: "Actus", href: "/actualites" },
-              { icon: "⚙️", label: "Réglages", href: "/settings" },
-            ].map((link) => (
-              <Link key={link.label} href={link.href} className="db-hover flex flex-col items-center"
-                style={{ background: t.cream, padding: "10px 4px", borderRadius: 12, fontSize: 10, gap: 3, color: t.ink(0.6), textDecoration: "none" }}>
-                <span aria-hidden style={{ fontSize: 16 }}>{link.icon}</span>{link.label}
-              </Link>
-            ))}
-          </div>
-          <Divider t={t} />
-          <SectionLabel t={t}>Mes thèmes</SectionLabel>
-          <div className="flex flex-wrap" style={{ gap: 5 }}>
-            {(preferences.themes.length > 0 ? preferences.themes : ["Aucun thème sélectionné"]).map((theme) => (
-              <span key={theme} style={{
-                background: preferences.themes.length > 0 ? "rgba(42,53,96,0.07)" : "transparent",
-                color: preferences.themes.length > 0 ? t.indigo : t.ink(0.4), fontSize: 11, borderRadius: 20, padding: "4px 12px" }}>{theme}</span>
-            ))}
-          </div>
-          <button type="button" onClick={() => setCustomizerOpen(true)} className="db-hover mt-2 w-full"
-            style={{ border: `1px solid ${t.black(0.08)}`, borderRadius: 8, fontSize: 11, padding: 6, color: t.ink(0.6) }}>Personnaliser</button>
-          <Divider t={t} />
-          <div className="flex flex-col" style={{ gap: 8 }}>
-            <Link href="/newsletter" style={{ textDecoration: "none" }}>
-              <div className="db-hover flex items-center gap-3" style={{ background: t.cream, borderRadius: 12, padding: 12, cursor: "pointer" }}>
-                <span style={{ fontSize: 20 }}>{"\u{1F4EC}"}</span>
-                <div className="min-w-0 flex-1">
-                  <p style={{ fontSize: 12, fontWeight: 500, color: t.text }}>Newsletters</p>
-                  <p style={{ fontSize: 10, color: t.ink(0.4) }}>Culturelles françaises</p>
-                </div>
-                <span style={{ fontSize: 11, color: t.indigo }}>→</span>
-              </div>
-            </Link>
-            <Link href="/podcasts" style={{ textDecoration: "none" }}>
-              <div className="db-hover flex items-center gap-3" style={{ background: t.cream, borderRadius: 12, padding: 12, cursor: "pointer" }}>
-                <span style={{ fontSize: 20 }}>{"\u{1F399}"}</span>
-                <div className="min-w-0 flex-1">
-                  <p style={{ fontSize: 12, fontWeight: 500, color: t.text }}>Podcasts{podcastSubCount > 0 ? ` · ${podcastSubCount}` : ""}</p>
-                  <p style={{ fontSize: 10, color: t.ink(0.4) }}>Découvrir & écouter</p>
-                </div>
-                <span style={{ fontSize: 11, color: t.indigo }}>→</span>
-              </div>
-            </Link>
-          </div>
-        </aside>
+        {modalOpen && <NewPostModal user={session.user} onClose={closeModal} onCreated={() => { setModalOpen(false); loadPosts(); }} t={t} />}
       </div>
-
-      {modalOpen && <NewPostModal user={session.user} onClose={closeModal} onCreated={() => { setModalOpen(false); loadPosts(); }} t={t} />}
-      {customizerOpen && <Customizer initial={preferences} onClose={() => setCustomizerOpen(false)} onSave={handleSavePreferences} />}
-
-      {utilityOpen && (
-        <>
-          <div aria-hidden className="fixed inset-0 z-40 md:hidden" style={{ background: "rgba(28,26,21,0.35)" }} onClick={() => setUtilityOpen(false)} />
-          <div role="dialog" aria-modal="true" aria-label="Panneau utilitaire"
-            className="fixed inset-x-0 bottom-0 z-50 md:hidden"
-            style={{ background: t.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "75vh", overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,0.12)" }}>
-            <div className="flex items-center justify-between" style={{ padding: "16px 20px 8px", borderBottom: `1px solid ${t.black(0.06)}` }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: t.text }}>⚡ Utilitaires</span>
-              <button type="button" onClick={() => setUtilityOpen(false)} aria-label="Fermer" className="db-play" style={{ fontSize: 16 }}>✕</button>
-            </div>
-            <div style={{ padding: "12px 20px 24px" }}>
-              <div className="grid grid-cols-4" style={{ gap: 8, marginBottom: 16 }}>
-                {[
-                  { icon: "✏️", value: String(posts?.length ?? 0), label: "posts" },
-                  { icon: "\u{1F3B5}", value: String((posts ?? []).filter((p) => p.type === "musique").length), label: "musiques" },
-                  { icon: "\u{1F4D6}", value: String((posts ?? []).filter((p) => p.type === "livre").length), label: "livres" },
-                  { icon: "\u{1F4AC}", value: String((posts ?? []).filter((p) => p.type === "reflexion").length), label: "réflexions" },
-                ].map((stat) => (
-                  <div key={stat.label} className="text-center" style={{ background: t.cream, borderRadius: 10, padding: "10px 4px" }}>
-                    <p style={{ fontSize: 14 }} aria-hidden>{stat.icon}</p>
-                    <p style={{ fontSize: 16, fontWeight: 600, color: t.text, lineHeight: 1.2 }}>{stat.value}</p>
-                    <p style={{ fontSize: 9, color: t.ink(0.4) }}>{stat.label}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-2" style={{ gap: 8 }}>
-                {[
-                  { icon: "➕", label: "Nouveau post", action: () => { setUtilityOpen(false); setModalOpen(true); } },
-                  { icon: "⚙️", label: "Personnaliser", action: () => { setUtilityOpen(false); setCustomizerOpen(true); } },
-                ].map((s) => (
-                  <button key={s.label} type="button" onClick={s.action} className="db-hover flex items-center justify-center"
-                    style={{ background: t.cream, padding: "12px 10px", borderRadius: 12, fontSize: 12, gap: 6, color: t.ink(0.6) }}>
-                    <span aria-hidden>{s.icon}</span>{s.label}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 grid grid-cols-3" style={{ gap: 8 }}>
-                {[
-                  { icon: "\u{1F9ED}", label: "Explorer", href: "/explore" },
-                  { icon: "\u{1F464}", label: "Profil", href: "/profile" },
-                  { icon: "\u{1F527}", label: "Paramètres", href: "/settings" },
-                ].map((link) => (
-                  <Link key={link.label} href={link.href} onClick={() => setUtilityOpen(false)} className="db-hover flex flex-col items-center"
-                    style={{ background: t.cream, padding: "12px 8px", borderRadius: 12, fontSize: 11, gap: 4, color: t.ink(0.6) }}>
-                    <span aria-hidden style={{ fontSize: 16 }}>{link.icon}</span>{link.label}
-                  </Link>
-                ))}
-              </div>
-              {preferences.themes.length > 0 && (
-                <div className="mt-4">
-                  <p style={{ fontSize: 9, color: t.ink(0.35), letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 400, marginBottom: 8 }}>Mes thèmes</p>
-                  <div className="flex flex-wrap" style={{ gap: 5 }}>
-                    {preferences.themes.map((theme) => <span key={theme} style={{ background: "rgba(42,53,96,0.07)", color: t.indigo, fontSize: 11, borderRadius: 20, padding: "4px 12px" }}>{theme}</span>)}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
     </SocialContext.Provider>
   );
 }
