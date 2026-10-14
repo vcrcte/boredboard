@@ -20,7 +20,6 @@ import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
 import { ensureProfile } from "@/lib/profile";
 import { claimReferral } from "@/lib/referral";
 import { avatarTones } from "@/lib/sample-data";
-import { getFollowing, getSuggested, follow as followUser, type PublicProfile } from "@/lib/social";
 import { supabase } from "@/lib/supabase";
 
 // ── Design tokens ─────────────────────────────────────────────────────────
