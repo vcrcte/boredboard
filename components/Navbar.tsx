@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 
 const memberLinks = [
   { label: "Board", href: "/dashboard", highlight: true },
+  { label: "Partager un son", href: "/partager" },
   { label: "Explorer", href: "/explore" },
 ];
 

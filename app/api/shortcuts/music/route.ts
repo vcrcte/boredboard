@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { extractLink } from '@/lib/share-music'
 
 // The Shortcut copies `share_url` when the reply has one, and the original link
 // otherwise; iOS Shortcuts can't time out a request, so the server answers
@@ -51,7 +52,7 @@ async function share(request: Request) {
 
     // Shared from Spotify, Deezer, YouTube or Apple Music: only a link arrives.
     // Some apps share text around the link ("Écoute X sur Spotify https://…"): keep the link only.
-    const url = typeof body.url === 'string' ? (/https:\/\/\S+/.exec(body.url)?.[0] ?? null) : null
+    const url = extractLink(body.url)
 
     if (url && !title) {
       try {

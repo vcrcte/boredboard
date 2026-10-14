@@ -80,13 +80,13 @@ export default function ShareButtons({ postId, source, matches, pending }: { pos
         ))}
       </div>
       <a
-        href={`/raccourci?ref=${postId}`}
+        href={`/partager?ref=${postId}`}
         onClick={() => track({ post_id: postId, event: "join_tap" })}
         style={{ display: "block", marginTop: 22, textAlign: "center", color: INDIGO, fontWeight: 500, fontSize: 15, textDecoration: "none" }}
       >
         Partage le tien →
       </a>
-      <p style={{ margin: "6px 0 0", textAlign: "center", fontSize: 12, color: MUTED }}>Tes morceaux, partagés depuis ton iPhone en un geste.</p>
+      <p style={{ margin: "6px 0 0", textAlign: "center", fontSize: 12, color: MUTED }}>Copie un lien, appuie, envoie. Rien à installer.</p>
     </div>
   );
 }

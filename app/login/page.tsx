@@ -40,7 +40,9 @@ export default function Login() {
       return;
     }
 
-    router.push("/dashboard");
+    // ?next=/partager etc.: only same-site paths, never "//host".
+    const next = new URLSearchParams(window.location.search).get("next");
+    router.push(next && /^\/(?!\/)/.test(next) ? next : "/dashboard");
   };
 
   return (
