@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -13,7 +12,9 @@ import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { getInitials } from "@/components/Navbar";
 import SharedMusicCard from "@/components/MusicCard";
-import SocialActions, { SocialContext, socialCss, type MyInteractions } from "@/components/dashboard/SocialActions";
+import { socialCss } from "@/components/dashboard/SocialActions";
+import NotificationsBell from "@/components/feed/NotificationsBell";
+import SocialFeed from "@/components/feed/SocialFeed";
 import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
 import { ensureProfile } from "@/lib/profile";
 import { claimReferral } from "@/lib/referral";
@@ -115,18 +116,6 @@ function parseShortcutTrack(value: unknown): ShortcutTrack | null {
   return { title, artist: textOrNull(raw.artist), album: textOrNull(raw.album), platform, artwork: httpsOrNull(raw.artwork), trackUrl: httpsOrNull(raw.trackUrl) };
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "maintenant";
-  if (mins < 60) return `${mins}min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}j`;
-  return `${Math.floor(days / 7)}sem`;
-}
-
 const postTypes: { value: PostType; label: string }[] = [
   { value: "musique", label: "Musique" },
   { value: "article", label: "Article" },
@@ -135,16 +124,6 @@ const postTypes: { value: PostType; label: string }[] = [
 ];
 
 const categoryList = ["Géopolitique", "Histoire", "Science", "Art", "Musique", "Littérature", "Tech"];
-
-// ── Tabs ──────────────────────────────────────────────────────────────────
-type FeedTab = "tout" | "musique" | "livre" | "article" | "reflexion";
-const TABS: { value: FeedTab; label: string; icon: string }[] = [
-  { value: "tout", label: "Tout", icon: "✨" },
-  { value: "musique", label: "Musique", icon: "♫" },
-  { value: "livre", label: "Livres", icon: "📚" },
-  { value: "article", label: "Articles", icon: "📰" },
-  { value: "reflexion", label: "Réflexions", icon: "💭" },
-];
 
 // ── OG Preview hook ───────────────────────────────────────────────────────
 function useOgPreview(url: string | null) {
@@ -174,27 +153,6 @@ function Avatar({ initials, size, background, color }: { initials: string; size:
       style={{ width: size, height: size, background, color, borderRadius: "50%", fontSize: Math.max(9, size * 0.36), fontWeight: 500, fontFamily: UI }}
     >
       {initials}
-    </span>
-  );
-}
-
-// ── Post type badges ─────────────────────────────────────────────────────
-function TypeBadge({ type, t }: { type: PostType; t: typeof LIGHT }) {
-  const cfg: Record<PostType, { label: string; icon: string; bg: string }> = {
-    musique: { label: "Musique", icon: "♫", bg: "rgba(142,155,224,0.15)" },
-    livre: { label: "Livre", icon: "📚", bg: "rgba(196,169,74,0.15)" },
-    article: { label: "Article", icon: "📰", bg: "rgba(22,163,74,0.15)" },
-    reflexion: { label: "Réflexion", icon: "💭", bg: "rgba(212,83,126,0.15)" },
-  };
-  const c = cfg[type];
-  return (
-    <span style={{
-      fontSize: 11, fontFamily: UI, fontWeight: 500,
-      padding: "3px 10px", borderRadius: 20,
-      background: c.bg, color: t.text,
-      display: "inline-flex", alignItems: "center", gap: 4,
-    }}>
-      {c.icon} {c.label}
     </span>
   );
 }
@@ -318,49 +276,6 @@ function ReflexionFeedCard({ post, t }: { post: Post; t: typeof LIGHT }) {
         <p style={{ fontSize: 11, color: t.muted, fontFamily: UI, marginTop: 10 }}>{post.category}</p>
       )}
     </div>
-  );
-}
-
-// ── Social feed post wrapper ─────────────────────────────────────────────
-function FeedPost({ post, t }: { post: Post; t: typeof LIGHT }) {
-  const tone = avatarTones[((post.user_id?.charCodeAt(0) ?? 0) + (post.user_id?.charCodeAt(1) ?? 0)) % avatarTones.length];
-  const authorName = post.profiles?.name ?? post.profiles?.username ?? "Quelqu'un";
-  const authorUsername = post.profiles?.username ?? "";
-
-  return (
-    <article style={{
-      background: t.surface,
-      borderRadius: 16,
-      padding: "20px 24px",
-      border: `1px solid ${t.line}`,
-    }}>
-      {/* Author header */}
-      <div className="flex items-center justify-between" style={{ marginBottom: 14 }}>
-        <Link href={`/profile?id=${post.user_id}`} className="flex items-center" style={{ gap: 10, textDecoration: "none" }}>
-          <Avatar initials={getInitials(post.profiles?.name ?? null, authorUsername)} size={38} {...tone} />
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: t.text, fontFamily: UI, lineHeight: 1.2 }}>{authorName}</p>
-            <p style={{ fontSize: 12, color: t.muted, fontFamily: UI }}>
-              @{authorUsername} &middot; {timeAgo(post.created_at)}
-            </p>
-          </div>
-        </Link>
-        <TypeBadge type={post.type} t={t} />
-      </div>
-
-      {/* Content by type */}
-      {post.type === "musique" && <MusicFeedCard post={post} t={t} />}
-      {post.type === "livre" && <BookFeedCard post={post} t={t} />}
-      {post.type === "article" && <ArticleFeedCard post={post} t={t} />}
-      {post.type === "reflexion" && <ReflexionFeedCard post={post} t={t} />}
-
-      {/* Social actions */}
-      <SocialActions
-        likes={post.likes_count ?? 0}
-        comments={0}
-        postId={post.id}
-      />
-    </article>
   );
 }
 
@@ -578,8 +493,7 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [feedError, setFeedError] = useState<string | null>(null);
-  const [mine, setMine] = useState<Record<string, MyInteractions>>({});
-  const [activeTab, setActiveTab] = useState<FeedTab>("tout");
+  const [feedVersion, setFeedVersion] = useState(0);
 
   const css = `
     @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@800&display=swap');
@@ -626,18 +540,6 @@ export default function Dashboard() {
       loaded = data as Post[];
     }
 
-    const viewerId = auth.session?.user.id;
-    const byPost: Record<string, MyInteractions> = {};
-    if (viewerId && loaded.length > 0) {
-      const { data: rows } = await supabase.from("interactions").select("post_id, type, content").eq("user_id", viewerId).in("post_id", loaded.map((p) => p.id));
-      for (const row of rows ?? []) {
-        const entry = (byPost[row.post_id] ??= { like: false, reaction: null, comment: null });
-        if (row.type === "like") entry.like = true;
-        else if (row.type === "reaction") entry.reaction = row.content;
-        else if (row.type === "comment") entry.comment = row.content;
-      }
-    }
-    setMine(byPost);
     setPosts(loaded);
   }, []);
 
@@ -658,19 +560,12 @@ export default function Dashboard() {
 
   const closeModal = useCallback(() => setModalOpen(false), []);
 
-  // Filtered posts by tab
-  const filteredPosts = useMemo(() => {
-    if (!posts) return [];
-    if (activeTab === "tout") return posts;
-    return posts.filter((p) => p.type === activeTab);
-  }, [posts, activeTab]);
-
   if (!session) return <div className="min-h-screen" style={{ background: t.ground }} />;
 
   const hasPosts = (posts?.length ?? 0) > 0;
 
   return (
-    <SocialContext.Provider value={{ user: session.user, viewerName: profile?.name ?? null, mine }}>
+    <>
       <div className="min-h-screen" style={{ background: t.ground, color: t.text, fontFamily: UI }}>
         <style>{css}</style>
 
@@ -692,6 +587,7 @@ export default function Dashboard() {
               }}>
                 + Partager
               </button>
+              <NotificationsBell userId={session.user.id} colors={t} />
               <button type="button" onClick={toggle} style={{
                 fontSize: 12, fontWeight: 500, fontFamily: UI,
                 padding: "8px 16px", borderRadius: 20,
@@ -750,37 +646,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Tab bar */}
-          {hasPosts && (
-            <div style={{ borderBottom: `1px solid ${t.line}`, marginBottom: 28 }}>
-              <div className="mx-auto shelf-scroll flex overflow-x-auto" style={{ maxWidth: 1200, padding: "0 28px", gap: 4 }}>
-                {TABS.map((tab) => {
-                  const active = activeTab === tab.value;
-                  const count = tab.value === "tout" ? posts?.length ?? 0 : posts?.filter((p) => p.type === tab.value).length ?? 0;
-                  return (
-                    <button
-                      key={tab.value}
-                      type="button"
-                      onClick={() => setActiveTab(tab.value)}
-                      className="feed-tab"
-                      style={{
-                        fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: UI,
-                        padding: "12px 18px", cursor: "pointer",
-                        background: "transparent", border: "none",
-                        color: active ? t.text : t.muted,
-                        borderBottom: active ? `2px solid ${t.primary}` : "2px solid transparent",
-                        opacity: active ? 1 : 0.7,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {tab.icon} {tab.label} <span style={{ fontSize: 11, opacity: 0.6 }}>({count})</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Main content area */}
           <div className="mx-auto" style={{ maxWidth: 1200, padding: "0 28px 96px" }}>
             {feedError ? (
@@ -794,22 +659,20 @@ export default function Dashboard() {
             ) : posts === null ? (
               <FeedSkeleton t={t} />
             ) : hasPosts ? (
-              <div className="grid gap-8" style={{ gridTemplateColumns: "1fr", maxWidth: 680 }}>
-                {/* Social feed */}
-                <div className="flex flex-col" style={{ gap: 16 }}>
-                  {filteredPosts.map((post) => (
-                    <FeedPost key={post.id} post={post} t={t} />
-                  ))}
-                  {filteredPosts.length === 0 && (
-                    <div className="text-center" style={{ padding: "48px 20px" }}>
-                      <p style={{ fontSize: 40, marginBottom: 12 }}>{TABS.find((tab) => tab.value === activeTab)?.icon}</p>
-                      <p style={{ fontSize: 15, color: t.muted, fontFamily: UI }}>
-                        Aucun contenu dans cette cat&eacute;gorie pour le moment.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <SocialFeed
+                session={session}
+                viewerName={profile?.name ?? null}
+                refreshKey={feedVersion}
+                t={t}
+                renderPost={(post: Post) => (
+                  <>
+                    {post.type === "musique" && <MusicFeedCard post={post} t={t} />}
+                    {post.type === "livre" && <BookFeedCard post={post} t={t} />}
+                    {post.type === "article" && <ArticleFeedCard post={post} t={t} />}
+                    {post.type === "reflexion" && <ReflexionFeedCard post={post} t={t} />}
+                  </>
+                )}
+              />
             ) : (
               /* Empty state placeholder */
               <div style={{ opacity: 0.4 }}>
@@ -838,8 +701,8 @@ export default function Dashboard() {
           +
         </button>
 
-        {modalOpen && <NewPostModal user={session.user} onClose={closeModal} onCreated={() => { setModalOpen(false); loadPosts(); }} t={t} />}
+        {modalOpen && <NewPostModal user={session.user} onClose={closeModal} onCreated={() => { setModalOpen(false); loadPosts(); setFeedVersion((v) => v + 1); }} t={t} />}
       </div>
-    </SocialContext.Provider>
+    </>
   );
 }
