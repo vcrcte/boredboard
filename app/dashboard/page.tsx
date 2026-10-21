@@ -15,6 +15,7 @@ import SharedMusicCard from "@/components/MusicCard";
 import { socialCss } from "@/components/dashboard/SocialActions";
 import NotificationsBell from "@/components/feed/NotificationsBell";
 import SocialFeed from "@/components/feed/SocialFeed";
+import TrendingSidebar from "@/components/feed/TrendingSidebar";
 import { fetchEmbed, parseEmbed, type MusicEmbed } from "@/lib/music";
 import { ensureProfile } from "@/lib/profile";
 import { claimReferral } from "@/lib/referral";
@@ -424,8 +425,6 @@ function FeedSkeleton({ t }: { t: typeof LIGHT }) {
 }
 
 // ── Follow suggestion sidebar ────────────────────────────────────────────
-// Not rendered yet (written for the feed redesign, 27ef88b).
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SuggestionsPanel({ t, userId }: { t: typeof LIGHT; userId: string | undefined }) {
   const [suggestions, setSuggestions] = useState<PublicProfile[]>([]);
   const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
@@ -503,6 +502,10 @@ export default function Dashboard() {
     .feed-tab { transition: all 0.15s ease; }
     .feed-tab:hover { opacity: 1; }
     ${socialCss}
+    @media (min-width: 860px) {
+      .bb-grid { grid-template-columns: 1fr 300px !important; }
+      .bb-sidebar { display: flex !important; flex-direction: column; }
+    }
   `;
 
   useEffect(() => {
@@ -646,47 +649,62 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Main content area */}
+          {/* Main content area — two-column grid */}
           <div className="mx-auto" style={{ maxWidth: 1200, padding: "0 28px 96px" }}>
-            {feedError ? (
-              <div className="text-center" style={{ padding: "60px 20px" }}>
-                <p style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: UI }}>Impossible de charger le feed</p>
-                <p className="mt-2" style={{ fontSize: 12, color: "#B4302F", fontFamily: UI }}>{feedError}</p>
-                <button type="button" onClick={loadPosts} className="mt-4" style={{ fontSize: 12, padding: "8px 20px", borderRadius: 6, border: `1px solid ${t.line}`, color: t.muted, background: "none", cursor: "pointer", fontFamily: UI }}>
-                  R&eacute;essayer
-                </button>
-              </div>
-            ) : posts === null ? (
-              <FeedSkeleton t={t} />
-            ) : hasPosts ? (
-              <SocialFeed
-                session={session}
-                viewerName={profile?.name ?? null}
-                refreshKey={feedVersion}
-                t={t}
-                renderPost={(post: Post) => (
-                  <>
-                    {post.type === "musique" && <MusicFeedCard post={post} t={t} />}
-                    {post.type === "livre" && <BookFeedCard post={post} t={t} />}
-                    {post.type === "article" && <ArticleFeedCard post={post} t={t} />}
-                    {post.type === "reflexion" && <ReflexionFeedCard post={post} t={t} />}
-                  </>
+            <div className="bb-grid" style={{ display: "grid", gridTemplateColumns: "1fr", gap: 28 }}>
+              {/* Feed column */}
+              <div style={{ minWidth: 0 }}>
+                {feedError ? (
+                  <div className="text-center" style={{ padding: "60px 20px" }}>
+                    <p style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: UI }}>Impossible de charger le feed</p>
+                    <p className="mt-2" style={{ fontSize: 12, color: "#B4302F", fontFamily: UI }}>{feedError}</p>
+                    <button type="button" onClick={loadPosts} className="mt-4" style={{ fontSize: 12, padding: "8px 20px", borderRadius: 6, border: `1px solid ${t.line}`, color: t.muted, background: "none", cursor: "pointer", fontFamily: UI }}>
+                      R&eacute;essayer
+                    </button>
+                  </div>
+                ) : posts === null ? (
+                  <FeedSkeleton t={t} />
+                ) : hasPosts ? (
+                  <SocialFeed
+                    session={session}
+                    viewerName={profile?.name ?? null}
+                    refreshKey={feedVersion}
+                    t={t}
+                    renderPost={(post: Post) => (
+                      <>
+                        {post.type === "musique" && <MusicFeedCard post={post} t={t} />}
+                        {post.type === "livre" && <BookFeedCard post={post} t={t} />}
+                        {post.type === "article" && <ArticleFeedCard post={post} t={t} />}
+                        {post.type === "reflexion" && <ReflexionFeedCard post={post} t={t} />}
+                      </>
+                    )}
+                  />
+                ) : (
+                  /* Empty state placeholder */
+                  <div style={{ opacity: 0.4 }}>
+                    <div className="shelf-scroll flex overflow-x-auto" style={{ gap: 16, paddingBottom: 24 }}>
+                      {[
+                        { w: 170, h: 170, r: 10 }, { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
+                        { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 }, { w: 220, h: 170, r: 10 },
+                        { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
+                      ].map((s, i) => (
+                        <div key={i} style={{ width: s.w, height: s.h, borderRadius: s.r, background: t.surface, flexShrink: 0 }} />
+                      ))}
+                    </div>
+                  </div>
                 )}
-              />
-            ) : (
-              /* Empty state placeholder */
-              <div style={{ opacity: 0.4 }}>
-                <div className="shelf-scroll flex overflow-x-auto" style={{ gap: 16, paddingBottom: 24 }}>
-                  {[
-                    { w: 170, h: 170, r: 10 }, { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
-                    { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 }, { w: 220, h: 170, r: 10 },
-                    { w: 130, h: 190, r: 6 }, { w: 170, h: 170, r: 10 },
-                  ].map((s, i) => (
-                    <div key={i} style={{ width: s.w, height: s.h, borderRadius: s.r, background: t.surface, flexShrink: 0 }} />
-                  ))}
-                </div>
               </div>
-            )}
+
+              {/* Sidebar — hidden on mobile, sticky on desktop */}
+              {hasPosts && (
+                <aside className="bb-sidebar" style={{ display: "none" }}>
+                  <div style={{ position: "sticky", top: 80, display: "flex", flexDirection: "column", gap: 20 }}>
+                    <TrendingSidebar t={t} />
+                    <SuggestionsPanel t={t} userId={userId} />
+                  </div>
+                </aside>
+              )}
+            </div>
           </div>
         </div>
 
