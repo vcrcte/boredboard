@@ -12,7 +12,7 @@ import { clientForRequest } from "@/lib/supabase-server";
 export const dynamic = "force-dynamic";
 
 const POST_SELECT = "id, user_id, type, content, url, category, likes_count, created_at, metadata, profiles!posts_user_id_fkey (id, name, username, avatar_url)";
-const LIMIT = 40;
+const LIMIT = 60;
 
 export async function GET(request: Request) {
   const auth = await clientForRequest(request);
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     .not("content", "ilike", "%Morceau actuel%")
     .not("content", "ilike", "%Test du Raccourci%")
     .order("created_at", { ascending: false })
-    .limit(scope === "all" ? 60 : LIMIT);
+    .limit(scope === "all" ? 100 : LIMIT);
   if (scope === "following") postQuery = postQuery.in("user_id", circle);
 
   let bookQuery = supabase

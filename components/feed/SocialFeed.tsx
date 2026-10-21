@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import { getInitials } from "@/components/Navbar";
@@ -27,6 +27,8 @@ const TYPES = [
   { value: "reflexion", label: "Réflexions" },
 ] as const;
 type TypeFilter = (typeof TYPES)[number]["value"];
+
+const PAGE_SIZE = 12;
 
 const tone = (id: string) => avatarTones[((id.charCodeAt(0) || 0) + (id.charCodeAt(1) || 0)) % avatarTones.length];
 
@@ -246,12 +248,37 @@ export default function SocialFeed<P extends BasePost>({
     type === "tout" ? true : entry.kind === "post" ? (entry.post as P).type === type : type === "livre",
   );
 
+  // ── Infinite scroll ──────────────────────────────────────────────────────
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset visible count when filter/scope changes
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [type, scope]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setVisibleCount((n) => n + PAGE_SIZE);
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [entries, type]);
+
+  const paged = visible.slice(0, visibleCount);
+  const hasMore = visibleCount < visible.length;
+
   const card = { background: t.surface, border: `1px solid ${t.line}`, borderRadius: 16, padding: "20px 22px" };
   const lonely = followingCount < 3;
 
   return (
     <SocialContext.Provider value={{ user: session.user, viewerName, mine }}>
-      <style>{socialCss}</style>
+      <style>{socialCss}{`
+        @keyframes bb-spin { to { transform: rotate(360deg); } }
+      `}</style>
       <div style={{ maxWidth: 680 }}>
         {/* Abonnements / Découvrir */}
         <div className="flex" style={{ gap: 6, marginBottom: 14 }}>
@@ -316,7 +343,7 @@ export default function SocialFeed<P extends BasePost>({
             {lonely && <InviteCard t={t} />}
             {lonely && <Suggestions viewerId={viewerId} followed={followed} onFollow={onFollow} t={t} />}
 
-            {visible.length === 0 && (
+            {paged.length === 0 && visible.length === 0 && (
               <div style={{ ...card, textAlign: "center", padding: "36px 22px" }}>
                 <p style={{ fontSize: 15, color: t.text, fontWeight: 600 }}>
                   {scope === "following" ? "Rien de neuf chez les gens que tu suis" : "Rien ici pour le moment"}
@@ -329,7 +356,7 @@ export default function SocialFeed<P extends BasePost>({
               </div>
             )}
 
-            {visible.map((entry, i) => (
+            {paged.map((entry, i) => (
               <div key={entry.id} className="flex flex-col" style={{ gap: 16 }}>
                 {entry.kind === "post" ? (
                   <article style={card}>
@@ -367,6 +394,13 @@ export default function SocialFeed<P extends BasePost>({
                 {!lonely && i === 3 && <Suggestions viewerId={viewerId} followed={followed} onFollow={onFollow} t={t} />}
               </div>
             ))}
+
+            {/* Infinite scroll sentinel */}
+            {hasMore && (
+              <div ref={sentinelRef} style={{ display: "flex", justifyContent: "center", padding: "24px 0" }}>
+                <div style={{ width: 24, height: 24, border: `2px solid ${t.line}`, borderTopColor: t.primary, borderRadius: "50%", animation: "bb-spin 0.6s linear infinite" }} />
+              </div>
+            )}
           </div>
         )}
       </div>

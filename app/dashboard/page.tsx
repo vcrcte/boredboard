@@ -280,9 +280,16 @@ function ReflexionFeedCard({ post, t }: { post: Post; t: typeof LIGHT }) {
   );
 }
 
+// ── URL type detection ───────────────────────────────────────────────────
+const MUSIC_PATTERNS = [/spotify\.com/, /music\.apple\.com/, /deezer\.com/, /soundcloud\.com/, /youtu\.?be/];
+const BOOK_PATTERNS = [/goodreads\.com/, /amazon\.\w+\/.*\/dp\//, /babelio\.com/, /bookshop\.org/];
+function detectTypeFromUrl(raw: string): PostType | null {
+  try { const host = new URL(raw).hostname + new URL(raw).pathname; if (MUSIC_PATTERNS.some((r) => r.test(host))) return "musique"; if (BOOK_PATTERNS.some((r) => r.test(host))) return "livre"; return "article"; } catch { return null; }
+}
+
 // ── Compose modal ─────────────────────────────────────────────────────────
 function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: () => void; onCreated: () => void; t: typeof LIGHT }) {
-  const [type, setType] = useState<PostType>("musique");
+  const [type, setType] = useState<PostType | null>(null);
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -292,7 +299,36 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicError, setMusicError] = useState(false);
   const [lookedUp, setLookedUp] = useState("");
+  const [autoDetected, setAutoDetected] = useState(false);
   const ogPreview = useOgPreview(type === "article" && url.trim() ? url.trim() : null);
+
+  // Auto-detect type from URL
+  const handleUrlChange = (value: string) => {
+    setUrl(value);
+    if (value.trim() !== lookedUp) { setMusicEmbed(null); setMusicError(false); }
+    const detected = detectTypeFromUrl(value.trim());
+    if (detected && (!type || autoDetected)) {
+      setType(detected);
+      setAutoDetected(true);
+    }
+  };
+
+  const handleTypeOverride = (newType: PostType) => {
+    setType(newType);
+    setAutoDetected(false);
+  };
+
+  // Auto-detect URL from pasted text in textarea
+  const handleContentChange = (value: string) => {
+    setContent(value);
+    if (!url) {
+      const match = value.match(/https?:\/\/[^\s]+/);
+      if (match) {
+        setUrl(match[0]);
+        handleUrlChange(match[0]);
+      }
+    }
+  };
 
   const lookUpMusic = async (value: string) => {
     const link = value.trim();
@@ -303,24 +339,35 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
     try { setMusicEmbed(await fetchEmbed(link)); } catch { setMusicEmbed(null); setMusicError(true); } finally { setMusicLoading(false); }
   };
 
+  // Auto-lookup music when URL changes to a music type
+  useEffect(() => {
+    if (type === "musique" && url.trim() && url.trim() !== lookedUp) {
+      const timer = setTimeout(() => lookUpMusic(url), 600);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, type]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  const effectiveType = type ?? "reflexion";
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (type === "musique" && !musicEmbed) { setError("Ajoute un lien Spotify, Apple Music, Deezer, SoundCloud ou YouTube reconnu."); return; }
-    const trimmedUrl = (type === "article" || type === "musique") ? url.trim() : "";
+    if (effectiveType === "musique" && !musicEmbed) { setError("Ajoute un lien Spotify, Apple Music, Deezer, SoundCloud ou YouTube reconnu."); return; }
+    const trimmedUrl = (effectiveType === "article" || effectiveType === "musique" || effectiveType === "livre") ? url.trim() : "";
     if (trimmedUrl && !safeUrl(trimmedUrl)) { setError("Le lien doit commencer par http:// ou https://"); return; }
     setSubmitting(true);
     const profileError = await ensureProfile(user);
     if (profileError) { setError(`Ton profil n'a pas pu être créé : ${profileError}`); setSubmitting(false); return; }
-    const post: Record<string, unknown> = { user_id: user.id, type, content: content.trim() || (type === "musique" && musicEmbed ? musicEmbed.title : ""), url: trimmedUrl || null, category };
-    let { error: insertError } = await supabase.from("posts").insert(type === "musique" ? { ...post, metadata: musicEmbed } : post);
-    if (insertError && type === "musique" && /metadata/i.test(insertError.message)) {
+    const post: Record<string, unknown> = { user_id: user.id, type: effectiveType, content: content.trim() || (effectiveType === "musique" && musicEmbed ? musicEmbed.title : ""), url: trimmedUrl || null, category };
+    let { error: insertError } = await supabase.from("posts").insert(effectiveType === "musique" ? { ...post, metadata: musicEmbed } : post);
+    if (insertError && effectiveType === "musique" && /metadata/i.test(insertError.message)) {
       ({ error: insertError } = await supabase.from("posts").insert(post));
     }
     if (insertError) { setError(`La publication a échoué : ${insertError.message}`); setSubmitting(false); return; }
@@ -329,58 +376,83 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
 
   const field: CSSProperties = { background: t.ground, border: `1px solid ${t.line}`, borderRadius: 8, color: t.text, outline: "none", width: "100%", fontFamily: UI };
 
+  const typeLabels: Record<PostType, string> = { musique: "♫ Musique", article: "📰 Article", livre: "📚 Livre", reflexion: "💭 Réflexion" };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)" }} onClick={onClose}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} className="w-full" style={{ maxWidth: 500, background: t.surface, borderRadius: 14, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} className="w-full" style={{ maxWidth: 520, background: t.surface, borderRadius: 14, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div className="flex items-center justify-between">
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY }}>Nouveau post</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: t.text, fontFamily: DISPLAY }}>Partager quelque chose</h2>
           <button type="button" onClick={onClose} style={{ fontSize: 18, color: t.muted, background: "none", border: "none", cursor: "pointer" }}>&times;</button>
         </div>
 
-        <div className="mt-4 flex" style={{ gap: 6 }}>
+        {/* Unified URL input — always visible */}
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => handleUrlChange(e.target.value)}
+          placeholder="Colle un lien (Spotify, article, livre…) ou choisis un type"
+          className="mt-4 block"
+          style={{ ...field, padding: "12px 14px", fontSize: 14 }}
+          autoFocus
+        />
+
+        {/* Auto-detected type badge */}
+        {autoDetected && type && (
+          <div className="mt-2 flex items-center" style={{ gap: 8 }}>
+            <span style={{ fontSize: 11, color: "#16A34A", fontFamily: UI }}>&check; Détecté : {typeLabels[type]}</span>
+          </div>
+        )}
+
+        {/* Type selector — subtle chips, user can override */}
+        <div className="mt-3 flex" style={{ gap: 6 }}>
           {postTypes.map((item) => (
-            <button key={item.value} type="button" onClick={() => setType(item.value)}
-              style={{ fontSize: 12, padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontFamily: UI, border: "none", ...(type === item.value ? { background: t.primary, color: t.onPrimary } : { background: t.ground, color: t.muted }) }}>
+            <button key={item.value} type="button" onClick={() => handleTypeOverride(item.value)}
+              style={{ fontSize: 12, padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontFamily: UI, border: "none", ...(effectiveType === item.value ? { background: t.primary, color: t.onPrimary } : { background: t.ground, color: t.muted }) }}>
               {item.label}
             </button>
           ))}
         </div>
 
-        {type === "article" && (
-          <>
-            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="URL de l'article" className="mt-3 block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
-            {ogPreview?.title && (
-              <div className="mt-2 flex items-center gap-3" style={{ background: t.ground, borderRadius: 8, padding: 10 }}>
-                {ogPreview.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={ogPreview.image} alt="" style={{ width: 60, height: 44, borderRadius: 4, objectFit: "cover" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{ogPreview.title}</p>
-                  <p className="truncate" style={{ fontSize: 10, color: t.muted }}>{ogPreview.domain}</p>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {type === "musique" && (
+        {/* Music preview */}
+        {effectiveType === "musique" && (
           <div className="mt-3">
-            <input type="url" value={url} onChange={(e) => { setUrl(e.target.value); if (e.target.value.trim() !== lookedUp) { setMusicEmbed(null); setMusicError(false); } }}
-              onBlur={(e) => lookUpMusic(e.currentTarget.value)} placeholder="Lien Spotify, Apple Music, Deezer, YouTube..." className="block" style={{ ...field, padding: "10px 14px", fontSize: 13 }} />
-            {musicLoading && <p className="mt-2" style={{ fontSize: 11, color: t.muted }}>Recherche&hellip;</p>}
+            {musicLoading && <p style={{ fontSize: 11, color: t.muted }}>Recherche du morceau&hellip;</p>}
             {musicEmbed && !musicLoading && (
-              <div className="mt-2">
+              <div>
                 <p className="mb-1.5" style={{ fontSize: 11, color: "#16A34A" }}>&check; Trouv&eacute;</p>
                 <SharedMusicCard embed={musicEmbed} href={url.trim()} />
               </div>
             )}
-            {musicError && !musicLoading && <p className="mt-2" style={{ fontSize: 11, color: "#DC2626" }}>Lien non reconnu</p>}
+            {musicError && !musicLoading && url.trim() && <p style={{ fontSize: 11, color: "#DC2626" }}>Lien musical non reconnu</p>}
           </div>
         )}
 
-        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={type === "reflexion" ? "Ta réflexion..." : "Un commentaire..."} rows={3} className="mt-3 block resize-none" style={{ ...field, padding: "12px 14px", fontSize: 14, lineHeight: 1.5, fontFamily: type === "reflexion" ? READING : UI }} />
+        {/* Article OG preview */}
+        {effectiveType === "article" && ogPreview?.title && (
+          <div className="mt-2 flex items-center gap-3" style={{ background: t.ground, borderRadius: 8, padding: 10 }}>
+            {ogPreview.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={ogPreview.image} alt="" style={{ width: 60, height: 44, borderRadius: 4, objectFit: "cover" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate" style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{ogPreview.title}</p>
+              <p className="truncate" style={{ fontSize: 10, color: t.muted }}>{ogPreview.domain}</p>
+            </div>
+          </div>
+        )}
 
+        {/* Content textarea */}
+        <textarea
+          value={content}
+          onChange={(e) => handleContentChange(e.target.value)}
+          placeholder={effectiveType === "reflexion" ? "Ta réflexion…" : effectiveType === "livre" ? "Titre — Auteur, et ton avis…" : "Un commentaire…"}
+          rows={3}
+          className="mt-3 block resize-none"
+          style={{ ...field, padding: "12px 14px", fontSize: 14, lineHeight: 1.5, fontFamily: effectiveType === "reflexion" ? READING : UI }}
+        />
+
+        {/* Categories */}
         <div className="mt-3 flex flex-wrap" style={{ gap: 5 }}>
           {categoryList.map((cat) => (
             <button key={cat} type="button" onClick={() => setCategory(category === cat ? null : cat)}
@@ -393,7 +465,7 @@ function NewPostModal({ user, onClose, onCreated, t }: { user: User; onClose: ()
         {error && <p className="mt-3" style={{ fontSize: 12, color: "#B4302F" }}>{error}</p>}
 
         <div className="mt-4 flex justify-end">
-          <button type="submit" disabled={(type === "musique" ? !musicEmbed : !content.trim()) || submitting}
+          <button type="submit" disabled={(effectiveType === "musique" ? !musicEmbed : !content.trim()) || submitting}
             style={{ background: t.primary, color: t.onPrimary, fontSize: 13, fontWeight: 500, fontFamily: UI, padding: "10px 24px", borderRadius: 8, border: "none", cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>
             {submitting ? "Publication…" : "Publier"}
           </button>
