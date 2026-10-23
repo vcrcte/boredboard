@@ -20,11 +20,11 @@ export type FeedTheme = { ground: string; surface: string; text: string; muted: 
 type BasePost = { id: string; user_id: string; type: string; created_at: string; profiles: { id: string; name: string | null; username: string } | null };
 
 const TYPES = [
-  { value: "tout", label: "Tout" },
-  { value: "musique", label: "Musique" },
-  { value: "livre", label: "Livres" },
-  { value: "article", label: "Articles" },
-  { value: "reflexion", label: "Réflexions" },
+  { value: "tout", label: "Tout", icon: "✦" },
+  { value: "musique", label: "Musique", icon: "♫" },
+  { value: "livre", label: "Livres", icon: "📖" },
+  { value: "article", label: "Articles", icon: "◉" },
+  { value: "reflexion", label: "Réflexions", icon: "✎" },
 ] as const;
 type TypeFilter = (typeof TYPES)[number]["value"];
 
@@ -274,33 +274,48 @@ export default function SocialFeed<P extends BasePost>({
   const card = { background: t.surface, border: `1px solid ${t.line}`, borderRadius: 16, padding: "20px 22px" };
   const lonely = followingCount < 3;
 
+  // Count entries per type for filter badges
+  const counts = useMemo(() => {
+    const all = entries ?? [];
+    const c: Record<string, number> = { tout: all.length };
+    for (const entry of all) {
+      const t = entry.kind === "post" ? (entry.post as P).type : "livre";
+      c[t] = (c[t] || 0) + 1;
+    }
+    return c;
+  }, [entries]);
+
   return (
     <SocialContext.Provider value={{ user: session.user, viewerName, mine }}>
       <style>{socialCss}{`
         @keyframes bb-spin { to { transform: rotate(360deg); } }
+        .bb-scope-tab { transition: all 0.2s ease; }
+        .bb-type-tab { transition: all 0.15s ease; }
       `}</style>
-      <div style={{ maxWidth: 680 }}>
-        {/* Abonnements / Découvrir */}
-        <div className="flex" style={{ gap: 6, marginBottom: 14 }}>
+      <div>
+        {/* Scope tabs — prominent, centered */}
+        <div className="flex" style={{ gap: 4, marginBottom: 18, borderBottom: `1px solid ${t.line}`, paddingBottom: 0 }}>
           {(
             [
-              ["following", `Mes abonnements${followingCount ? ` · ${followingCount}` : ""}`],
+              ["following", `Abonnements${followingCount ? ` (${followingCount})` : ""}`],
               ["all", "Découvrir"],
             ] as const
           ).map(([value, label]) => (
             <button
               key={value}
               type="button"
+              className="bb-scope-tab"
               onClick={() => switchScope(value)}
               style={{
                 fontSize: 14,
-                fontWeight: scope === value ? 700 : 500,
-                padding: "9px 18px",
-                borderRadius: 24,
+                fontWeight: scope === value ? 600 : 400,
+                padding: "10px 20px",
                 cursor: "pointer",
-                border: scope === value ? "none" : `1px solid ${t.line}`,
-                background: scope === value ? t.text : "transparent",
-                color: scope === value ? t.ground : t.muted,
+                border: "none",
+                borderBottom: scope === value ? `2px solid ${t.primary}` : "2px solid transparent",
+                background: "transparent",
+                color: scope === value ? t.text : t.muted,
+                marginBottom: -1,
               }}
             >
               {label}
@@ -308,28 +323,38 @@ export default function SocialFeed<P extends BasePost>({
           ))}
         </div>
 
-        {/* Type filter */}
-        <div className="flex overflow-x-auto" style={{ gap: 4, marginBottom: 20, scrollbarWidth: "none" }}>
-          {TYPES.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setType(option.value)}
-              style={{
-                fontSize: 12,
-                padding: "6px 12px",
-                borderRadius: 6,
-                cursor: "pointer",
-                border: "none",
-                whiteSpace: "nowrap",
-                background: type === option.value ? t.surface : "transparent",
-                color: type === option.value ? t.text : t.muted,
-                fontWeight: type === option.value ? 600 : 400,
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
+        {/* Type filter — with icons and counts */}
+        <div className="flex overflow-x-auto" style={{ gap: 6, marginBottom: 22, scrollbarWidth: "none" }}>
+          {TYPES.map((option) => {
+            const count = counts[option.value] ?? 0;
+            const active = type === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className="bb-type-tab"
+                onClick={() => setType(option.value)}
+                style={{
+                  fontSize: 13,
+                  padding: "7px 14px",
+                  borderRadius: 20,
+                  cursor: "pointer",
+                  border: active ? "none" : `1px solid ${t.line}`,
+                  whiteSpace: "nowrap",
+                  background: active ? t.surface : "transparent",
+                  color: active ? t.text : t.muted,
+                  fontWeight: active ? 600 : 400,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <span style={{ fontSize: 11 }}>{option.icon}</span>
+                {option.label}
+                {entries !== null && <span style={{ fontSize: 11, opacity: 0.6 }}>({count})</span>}
+              </button>
+            );
+          })}
         </div>
 
         {error && <p style={{ fontSize: 13, color: "#B4302F", marginBottom: 16 }}>{error}</p>}

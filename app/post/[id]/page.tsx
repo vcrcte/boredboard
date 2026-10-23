@@ -21,12 +21,12 @@ const MONO = "'JetBrains Mono', monospace";
 const HERO_SERIF = "'DM Serif Display', Literata, Georgia, serif";
 
 const DARK = {
-  ground: "#121A3A",
-  surface: "#1B2450",
+  ground: "#162550",
+  surface: "#1E3068",
   text: "#E6E8E3",
   muted: "#A3A8B8",
   primary: "#8E9BE0",
-  onPrimary: "#121A3A",
+  onPrimary: "#162550",
   line: "rgba(255,255,255,0.10)",
   ink: (a: number) => `rgba(230,232,227,${a})`,
 };
@@ -124,11 +124,10 @@ function avatarColor(userId: string) {
 function Avatar({
   profile,
   size = 40,
-  t,
 }: {
   profile: Profile;
   size?: number;
-  t: Theme;
+  t?: Theme;
 }) {
   const bg = avatarColor(profile.id);
   if (profile.avatar_url) {
@@ -530,7 +529,7 @@ export default function PostDetailPage() {
                           fontSize: 13,
                         }}
                       >
-                        Chargement de l'aperçu…
+                        Chargement de l&apos;aperçu…
                       </div>
                     )}
                     {ogData && (
@@ -609,7 +608,7 @@ export default function PostDetailPage() {
                                 gap: 4,
                               }}
                             >
-                              Lire l'article
+                              Lire l&apos;article
                               <svg
                                 width="14"
                                 height="14"
